@@ -130,6 +130,15 @@ void run_task_finder(TaskService& service, const Config& config) {
         return;
     }
 
+    // Without any tasks the agenda is empty and the finder would close at
+    // once, leaving the user with a blank screen. Warn and bail out instead.
+    if(service.all_tasks().empty()) {
+        sparcli::alert::warning(
+            "No tasks yet. Create one with 'mdtask add <title>'."
+        );
+        return;
+    }
+
     static const char* const HEADERS[N_COLS] = {"!", "Task", "Due", "Status"};
 
     // The shortcut set is borrowed by every run, so it lives for the loop.

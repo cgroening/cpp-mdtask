@@ -1,10 +1,11 @@
 #include "tui/task_form.hpp"
 
-#include "util/date.hpp"
-
 #include <sparcli.hpp>
 
+#include <chrono>
 #include <cstdlib>
+#include <ctime>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -37,6 +38,28 @@ std::size_t priority_to_index(Priority priority) {
     return 0;
 }
 
+/** Seeds the date picker from a calendar day (the value fields only). */
+std::tm to_tm(std::chrono::year_month_day date) {
+    std::tm seed{};
+    seed.tm_year = static_cast<int>(date.year()) - 1900;
+    seed.tm_mon  = static_cast<int>(static_cast<unsigned>(date.month())) - 1;
+    seed.tm_mday = static_cast<int>(static_cast<unsigned>(date.day()));
+    return seed;
+}
+
+/** Converts a picked `std::tm` to a calendar day, or nullopt if implausible. */
+std::optional<std::chrono::year_month_day> from_tm(const std::tm& picked) {
+    const std::chrono::year_month_day date{
+        std::chrono::year{picked.tm_year + 1900},
+        std::chrono::month{static_cast<unsigned>(picked.tm_mon + 1)},
+        std::chrono::day{static_cast<unsigned>(picked.tm_mday)},
+    };
+    if(!date.ok()) {
+        return std::nullopt;
+    }
+    return date;
+}
+
 /** Resolves the editor for the multiline field: config, then $EDITOR, nvim. */
 std::string resolve_editor(const Config& config) {
     if(!config.editor.empty()) {
@@ -66,19 +89,22 @@ std::optional<FormResult> run_task_form(
     const Config& config, const Task* existing
 ) {
     const std::string editor = resolve_editor(config);
-    const std::string due_initial =
-        (existing && existing->due) ? to_iso(*existing->due) : "";
+    // A zeroed seed leaves the field empty (no due date) and opens the picker
+    // at today; an existing due date pre-selects that day.
+    const std::tm due_initial =
+        (existing && existing->due) ? to_tm(*existing->due) : std::tm{};
 
     sparcli::Form form({
         .title  = existing ? "Edit task" : "New task",
-        .accent = sparcli::palette::accent(),
+        // Magenta highlights the active cell and the inline editor panel.
+        .accent = sparcli::palette::magenta(),
         .editor = editor.c_str(),
     });
 
     form.row_begin();
     const int title_id = form.add_text(
         "Title", existing ? existing->title : "",
-        {.width_mode = SC_FWIDTH_AUTO, .required = true}
+        {.width_mode = SC_FWIDTH_AUTO, .col_span = 3, .required = true}
     );
 
     form.row_begin();
@@ -87,9 +113,10 @@ std::optional<FormResult> run_task_form(
         existing ? priority_to_index(existing->priority) : 0,
         {.width_mode = SC_FWIDTH_PCT, .width = 33}
     );
-    const int due_id = form.add_text(
-        "Due (YYYY-MM-DD)", due_initial,
-        {.width_mode = SC_FWIDTH_PCT, .width = 34}
+    const int due_id = form.add_date(
+        "Due", due_initial,
+        {.width_mode = SC_FWIDTH_PCT, .width = 34, .date_optional = true,
+         .help = "enter picks a date, del clears it"}
     );
     const int someday_id = form.add_bool(
         "Someday", existing ? existing->someday : false,
@@ -99,8 +126,8 @@ std::optional<FormResult> run_task_form(
     form.row_begin();
     const int description_id = form.add_text(
         "Description", existing ? existing->description : "",
-        {.width_mode = SC_FWIDTH_AUTO, .height = 6, .multiline = true,
-         .help = "ctrl-g opens the editor"}
+        {.width_mode = SC_FWIDTH_AUTO, .col_span = 3, .height = 6,
+         .multiline = true, .help = "ctrl-g opens the editor"}
     );
 
     if(!form.run()) {
@@ -113,14 +140,10 @@ std::optional<FormResult> run_task_form(
     result.priority = priority_from_index(form.get_choice(priority_id));
     result.someday = form.get_bool(someday_id);
 
-    const std::string due_text = std::string(form.get_string(due_id));
-    if(!due_text.empty()) {
-        result.due = parse_iso_date(due_text);
-        if(!result.due) {
-            sparcli::alert::warning(
-                "Ignored invalid date '" + due_text + "' (use YYYY-MM-DD)"
-            );
-        }
+    // An empty / cleared date field means "no due date" (an Inbox task).
+    if(const auto picked = form.get_date(due_id);
+       picked && !sparcli::date_empty(*picked)) {
+        result.due = from_tm(*picked);
     }
     return result;
 }
