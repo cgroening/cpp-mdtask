@@ -1,0 +1,24 @@
+# Example mdtask configuration.
+#
+# Copy to $XDG_CONFIG_HOME/mdtask/config.toml (usually
+# ~/.config/mdtask/config.toml) and adjust. Every key is optional; omitted
+# keys fall back to the built-in defaults. Environment variables with the
+# MDTASK_ prefix (e.g. MDTASK_TASKS_DIR) override these at runtime.
+
+# Where the active task files live. Default: $XDG_DATA_HOME/mdtask/tasks.
+# Point this at an Obsidian vault folder to edit tasks there too.
+tasks_dir = "~/.local/share/mdtask/tasks"
+
+# Where archived task files are moved. Default: <tasks_dir>/archive.
+# archive_dir = "~/.local/share/mdtask/tasks/archive"
+
+# Date display format: "dmy" (DD.MM.YYYY) or "iso" (YYYY-MM-DD).
+# File names always use ISO regardless of this setting.
+date_format = "dmy"
+
+# Editor for the multiline description (Ctrl-G in the form). Empty uses
+# $EDITOR, then falls back to nvim.
+editor = "nvim"
+
+# Minimum level for the colored stderr log: debug, info, warn, error, off.
+log_level = "warn"

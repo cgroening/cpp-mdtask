@@ -1,0 +1,10 @@
+-std=c++26
+-Wall
+-Wextra
+-Wpedantic
+-Wshadow
+-Wno-missing-designated-field-initializers
+-Isrc
+-Itests
+-isystem/Users/cgroening/.local/include
+-isystem/usr/local/include

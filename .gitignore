@@ -1,0 +1,15 @@
+# Build artefacts
+/build/
+/bin/
+*.o
+*.d
+
+# clangd compilation database (machine-specific; generate with `make compdb`)
+/compile_commands.json
+/.cache/
+
+# Local data file (only used as a fallback when no HOME is set)
+/tasks.tsv
+
+# macOS
+.DS_Store
