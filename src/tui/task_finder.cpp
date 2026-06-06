@@ -96,6 +96,7 @@ sparcli::FuzzyOpts make_opts(const char* const* headers) {
     opts.headers = headers;
     opts.n_cols = N_COLS;
     opts.search_columns = std::uint64_t{1} << COL_TASK;
+    opts.stretch_columns = std::uint64_t{1} << COL_TASK;
     opts.order = SC_FUZZY_ORDER_INSERTION;
     opts.section_counts = true;
     opts.modal = true;
@@ -109,6 +110,7 @@ sparcli::FuzzyOpts make_opts(const char* const* headers) {
         .enabled = true,
         .border = {.type = SC_BORDER_ROUNDED, .color = sparcli::palette::accent()},
         .padding = {.right = 1, .left = 1},
+        .width_mode = SC_WIDTH_FULL,
     };
     return opts;
 }
