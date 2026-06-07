@@ -25,8 +25,16 @@ CPPFLAGS += -Isrc
 # build against a local checkout without installing, override both variables:
 #   make SPARCLI_CFLAGS=-I/path/to/sparcli/include \
 #        SPARCLI_LIBS=/path/to/sparcli/libsparcli.a
+#
+# sparcli is linked statically by default (the static archive from pkg-config's
+# libdir): a dynamic link is fragile because the installed dylib's install_name
+# need not match its install prefix, leaving the binary unable to locate it at
+# run time. Pass SPARCLI_LIBS explicitly to link some other way.
 SPARCLI_CFLAGS ?= $(shell pkg-config --cflags sparcli 2>/dev/null)
-SPARCLI_LIBS   ?= $(shell pkg-config --libs sparcli 2>/dev/null)
+SPARCLI_LIBDIR := $(shell pkg-config --variable=libdir sparcli 2>/dev/null)
+ifneq ($(strip $(SPARCLI_LIBDIR)),)
+SPARCLI_LIBS ?= $(SPARCLI_LIBDIR)/libsparcli.a
+endif
 
 ifeq ($(strip $(SPARCLI_LIBS)),)
 $(error sparcli not found via pkg-config. Install it (run `make install` in \
