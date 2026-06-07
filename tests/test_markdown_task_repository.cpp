@@ -116,6 +116,15 @@ void run_markdown_task_repository_tests() {
         CHECK(archived.size() == 1);
         CHECK(archived[0].id == "id000000");
         CHECK(archived[0].title == "Pay the invoice");
+
+        // unarchive moves the file back into the active directory.
+        repository.unarchive(archived[0]);
+        CHECK(repository.find_archived().empty());
+        CHECK(repository.find_all().size() == 1);
+        CHECK(any_file_named(tasks_dir, "2026-06-10--pay-the-invoice.md"));
+        CHECK(!any_file_named(
+            archive_dir / "2026" / "06", "2026-06-10--pay-the-invoice.md"
+        ));
     }
 
     fs::remove_all(dir, ec);

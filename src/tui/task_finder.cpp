@@ -29,6 +29,7 @@ enum {
     ACT_ARCHIVE        = 4,
     ACT_NEW            = 5,
     ACT_TOGGLE_ARCHIVE = 6,
+    ACT_RESTORE        = 7,
 };
 
 /** Stable finder row id derived from a task's id. */
@@ -228,7 +229,7 @@ void run_task_finder(TaskService& service, const Config& config) {
         if(show_archive) {
             shortcuts.on_return(
                 sparcli::key_char('v'), ACT_TOGGLE_ARCHIVE, "agenda"
-            );
+            ).on_return(sparcli::key_char('r'), ACT_RESTORE, "restore");
         } else {
             shortcuts.on_return(sparcli::key_char('d'), ACT_TOGGLE_DONE, "done")
                      .on_return(sparcli::key_char('+'), ACT_SHIFT_PLUS, "+1d")
@@ -304,8 +305,15 @@ void run_task_finder(TaskService& service, const Config& config) {
         const Task& task = *rows.by_index[cursor];
         focus = row_id(task.id);
 
-        // The archive view is read-only: only the toggle above acts on it.
+        // In the archive view the only mutating action is restoring a task
+        // back into the agenda; everything else leaves it untouched.
         if(show_archive) {
+            if(action == ACT_RESTORE) {
+                report(service.restore_task(task.id));
+                if(service.archived_tasks().empty()) {
+                    show_archive = false;   // nothing left to show
+                }
+            }
             continue;
         }
 

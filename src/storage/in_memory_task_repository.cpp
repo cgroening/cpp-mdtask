@@ -44,4 +44,14 @@ void InMemoryTaskRepository::archive(const Task& task) {
     tasks_.erase(removed.begin(), removed.end());
 }
 
+void InMemoryTaskRepository::unarchive(const Task& task) {
+    // Move the task from the archive set back into the active set.
+    if(const auto found = std::ranges::find(archived_, task.id, &Task::id);
+       found != archived_.end()) {
+        tasks_.push_back(*found);
+    }
+    const auto removed = std::ranges::remove(archived_, task.id, &Task::id);
+    archived_.erase(removed.begin(), removed.end());
+}
+
 }  // namespace mdtask

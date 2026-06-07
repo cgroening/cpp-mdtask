@@ -108,6 +108,15 @@ public:
      */
     [[nodiscard]] Result<Task> archive_task(const std::string& id);
 
+    /**
+     * Restores an archived task back into the active set.
+     *
+     * @param id Id of an archived task.
+     * @return The restored task, or a NOT_FOUND error when no archived task
+     *         has that id.
+     */
+    [[nodiscard]] Result<Task> restore_task(const std::string& id);
+
 private:
     TaskRepository& repository_;
 };

@@ -157,6 +157,15 @@ void run_service_tests() {
         CHECK(service.all_tasks().empty());
         CHECK(service.archived_tasks().size() == 1);
         CHECK(service.archived_tasks()[0].id == created->id);
+
+        // restore_task moves it back into the active set.
+        CHECK(service.restore_task(created->id).has_value());
+        CHECK(service.archived_tasks().empty());
+        CHECK(service.all_tasks().size() == 1);
+        CHECK(service.all_tasks()[0].id == created->id);
+
+        // Restoring an unknown id fails.
+        CHECK(!service.restore_task("missing").has_value());
     }
 
     // open_tasks returns only tasks that are not done yet.

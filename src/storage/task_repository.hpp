@@ -68,6 +68,15 @@ public:
      * @throws StorageError when the task cannot be moved.
      */
     virtual void archive(const Task& task) = 0;
+
+    /**
+     * Restores an archived task back into the active set (the inverse of
+     * archive).
+     *
+     * @param task The task to restore; unknown ids are ignored.
+     * @throws StorageError when the task cannot be moved.
+     */
+    virtual void unarchive(const Task& task) = 0;
 };
 
 }  // namespace mdtask

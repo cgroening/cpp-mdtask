@@ -39,6 +39,7 @@ public:
     void save(const Task& task) override;
     void update(const Task& task) override;
     void archive(const Task& task) override;
+    void unarchive(const Task& task) override;
 
 private:
     /** Reads and parses the tasks at `paths`, skipping unreadable files. */

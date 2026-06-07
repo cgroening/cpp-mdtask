@@ -368,4 +368,40 @@ void MarkdownTaskRepository::archive(const Task& task) {
     sparcli::logging::info("archived task " + task.id);
 }
 
+void MarkdownTaskRepository::unarchive(const Task& task) {
+    // Locate the archived file by id anywhere under the archive tree.
+    std::optional<fs::path> source;
+    for(const auto& path : list_markdown_files_recursive(archive_dir_)) {
+        if(read_id_of(path) == task.id) {
+            source = path;
+            break;
+        }
+    }
+    if(!source) {
+        return;
+    }
+
+    // Pick a unique target name in the active directory (mirrors update()).
+    const std::string base = task_filename(task);
+    const std::string prefix = base.substr(0, base.size() - 3);  // drop ".md"
+    fs::path target = tasks_dir_ / base;
+    for(int suffix = 2; fs::exists(target); ++suffix) {
+        target = tasks_dir_ / (prefix + "-" + std::to_string(suffix) + ".md");
+    }
+
+    std::error_code error;
+    fs::create_directories(tasks_dir_, error);
+    fs::rename(*source, target, error);
+    if(error) {
+        // Fall back to copy+remove when the active dir is on another filesystem.
+        error.clear();
+        fs::copy_file(*source, target, error);
+        if(error) {
+            throw StorageError("Cannot restore task: " + source->string());
+        }
+        fs::remove(*source, error);
+    }
+    sparcli::logging::info("restored task " + task.id);
+}
+
 }  // namespace mdtask

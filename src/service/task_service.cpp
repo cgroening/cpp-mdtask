@@ -156,4 +156,16 @@ Result<Task> TaskService::archive_task(const std::string& id) {
     return *task;
 }
 
+Result<Task> TaskService::restore_task(const std::string& id) {
+    // The active lookup does not see archived tasks, so search the archive.
+    for(const auto& task : repository_.find_archived()) {
+        if(task.id == id) {
+            repository_.unarchive(task);
+            sparcli::logging::info("restored task " + id);
+            return task;
+        }
+    }
+    return std::unexpected(task_not_found_error(id));
+}
+
 }  // namespace mdtask
