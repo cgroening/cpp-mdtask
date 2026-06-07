@@ -193,6 +193,55 @@ void run_service_tests() {
         CHECK(!service.restore_task("missing").has_value());
     }
 
+    // New tasks get an increasing order; move_task reorders within a section.
+    {
+        InMemoryTaskRepository repository;
+        TaskService service(repository);
+
+        const auto a = service.add_task({.title = "A"});
+        const auto b = service.add_task({.title = "B"});
+        const auto c = service.add_task({.title = "C"});
+        CHECK(a->order.value() < b->order.value());
+        CHECK(b->order.value() < c->order.value());
+
+        const auto order_of = [&](const std::string& id) {
+            for(const auto& task : service.all_tasks()) {
+                if(task.id == id) {
+                    return task.order.value_or(-1);
+                }
+            }
+            return -1;
+        };
+
+        // Move C to the top of the (Inbox) section.
+        CHECK(service.move_task(c->id, MoveDir::TOP).has_value());
+        CHECK(order_of(c->id) < order_of(a->id));
+        CHECK(order_of(a->id) < order_of(b->id));
+
+        // Move C down one: now A, C, B.
+        CHECK(service.move_task(c->id, MoveDir::DOWN).has_value());
+        CHECK(order_of(a->id) < order_of(c->id));
+        CHECK(order_of(c->id) < order_of(b->id));
+    }
+
+    // Changing the date and reopening both re-append at the end of the section.
+    {
+        InMemoryTaskRepository repository;
+        TaskService service(repository);
+
+        const auto a = service.add_task({.title = "A"});   // order 0
+        const auto b = service.add_task({.title = "B"});   // order 1
+
+        const auto shifted = service.shift_due(a->id, 1);
+        CHECK(shifted.has_value());
+        CHECK(shifted->order == 2);   // append: max active order (1) + 1
+
+        CHECK(service.set_status(b->id, Status::DONE).has_value());
+        const auto reopened = service.set_status(b->id, Status::OPEN);
+        CHECK(reopened.has_value());
+        CHECK(reopened->order == 3);  // append over A's new order (2)
+    }
+
     // open_tasks returns only tasks that are not done yet.
     {
         InMemoryTaskRepository repository;

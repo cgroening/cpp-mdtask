@@ -7,34 +7,48 @@
 #include <map>
 #include <optional>
 #include <string>
-#include <tuple>
 #include <utility>
 
 namespace mdtask {
 
 namespace {
 
-/** Sort key that orders tasks within any section consistently. */
-auto order_key(const Task& task) {
-    // Open tasks first, then earliest due, then highest priority, then title.
-    // A missing due sorts last; priority is negated so HIGH (largest enum)
-    // comes first.
-    const std::chrono::sys_days due =
-        task.due ? std::chrono::sys_days{*task.due}
-                 : std::chrono::sys_days::max();
-    return std::make_tuple(
-        task.status == Status::DONE,
-        due,
-        -static_cast<int>(task.priority),
-        task.title
-    );
+/**
+ * Orders two tasks within a section: active (not done) before done; active by
+ * the manual `order` (unset sorts last, then priority desc, then title); done by
+ * completion time (newest-done last, then title).
+ */
+bool section_less(const Task& a, const Task& b) {
+    const bool a_done = a.status == Status::DONE;
+    const bool b_done = b.status == Status::DONE;
+    if(a_done != b_done) {
+        return !a_done;   // active tasks come first
+    }
+
+    if(!a_done) {
+        if(a.order != b.order) {
+            if(!a.order) { return false; }   // unset order sorts to the bottom
+            if(!b.order) { return true; }
+            return *a.order < *b.order;
+        }
+        if(a.priority != b.priority) {
+            return static_cast<int>(a.priority) > static_cast<int>(b.priority);
+        }
+        return a.title < b.title;
+    }
+
+    // Both done: oldest completion first, so freshly done tasks fall to the end.
+    if(a.completed_at != b.completed_at) {
+        if(!a.completed_at) { return false; }
+        if(!b.completed_at) { return true; }
+        return *a.completed_at < *b.completed_at;
+    }
+    return a.title < b.title;
 }
 
-/** Orders a group of tasks in place by `order_key`. */
+/** Orders a group of tasks in place for display. */
 void sort_section(std::vector<Task>& tasks) {
-    std::ranges::sort(tasks, {}, [](const Task& task) {
-        return order_key(task);
-    });
+    std::ranges::sort(tasks, section_less);
 }
 
 constexpr const char* MONTH_NAMES[] = {

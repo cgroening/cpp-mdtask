@@ -11,6 +11,9 @@
 
 namespace mdtask {
 
+/** Direction for moving a task within its finder section. */
+enum class MoveDir { UP, DOWN, TOP, BOTTOM };
+
 /** Fields supplied when creating a task (id and timestamps are derived). */
 struct NewTask {
     std::string title;                                /**< Required title. */
@@ -118,6 +121,17 @@ public:
      * @param id Id of an existing task.
      * @return The archived task, or a NOT_FOUND error.
      */
+    /**
+     * Moves a task within its finder section by adjusting the manual order.
+     *
+     * @param id        Id of an active task (done tasks are not reorderable).
+     * @param direction Up/down by one, or all the way to the top/bottom.
+     * @return The moved task, or a NOT_FOUND error.
+     */
+    [[nodiscard]] Result<Task> move_task(
+        const std::string& id, MoveDir direction
+    );
+
     [[nodiscard]] Result<Task> archive_task(const std::string& id);
 
     /**
@@ -130,6 +144,9 @@ public:
     [[nodiscard]] Result<Task> restore_task(const std::string& id);
 
 private:
+    /** One past the largest order among active tasks (places a task last). */
+    [[nodiscard]] int append_order() const;
+
     TaskRepository& repository_;
 };
 

@@ -148,5 +148,20 @@ void run_markdown_task_repository_tests() {
         CHECK(legacy->status == Status::DONE);
     }
 
+    // order round-trips; absent in the file means nullopt.
+    {
+        fs::remove_all(dir, ec);
+        MarkdownTaskRepository repository(tasks_dir, archive_dir);
+
+        Task task = sample_task();
+        CHECK(!task.order.has_value());
+        repository.save(task);
+        CHECK(!repository.find_by_id("id000000")->order.has_value());
+
+        task.order = 5;
+        repository.update(task);
+        CHECK(repository.find_by_id("id000000")->order == 5);
+    }
+
     fs::remove_all(dir, ec);
 }

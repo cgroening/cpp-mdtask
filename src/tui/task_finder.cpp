@@ -33,7 +33,21 @@ enum {
     ACT_RESTORE        = 7,
     ACT_JUMP           = 8,
     ACT_CYCLE_STATUS   = 9,
+    ACT_MOVE_UP        = 10,
+    ACT_MOVE_DOWN      = 11,
+    ACT_MOVE_TOP       = 12,
+    ACT_MOVE_BOTTOM    = 13,
 };
+
+/** Builds an Alt(+Shift)+named-key chord for the reorder shortcuts. */
+sparcli::KeyChord alt_key(ScKeyType key, bool shift) {
+    return sparcli::KeyChord{
+        .key = key,
+        .mods = static_cast<std::uint8_t>(
+            SC_MOD_ALT | (shift ? SC_MOD_SHIFT : SC_MOD_NONE)
+        ),
+    };
+}
 
 /** Next status when cycling: open -> in progress -> done -> open. */
 Status next_status(Status status) {
@@ -303,7 +317,11 @@ void run_task_finder(TaskService& service, const Config& config) {
                      .on_return(sparcli::key_char('n'), ACT_NEW, "new")
                      .on_return(sparcli::key_char('s'), ACT_JUMP, "section")
                      .on_return(sparcli::key_char('v'), ACT_TOGGLE_ARCHIVE,
-                                "archive view");
+                                "archive view")
+                     .on_return(alt_key(SC_KEY_UP, false), ACT_MOVE_UP, "move")
+                     .on_return(alt_key(SC_KEY_DOWN, false), ACT_MOVE_DOWN)
+                     .on_return(alt_key(SC_KEY_UP, true), ACT_MOVE_TOP, "to end")
+                     .on_return(alt_key(SC_KEY_DOWN, true), ACT_MOVE_BOTTOM);
         }
 
         const auto active = service.all_tasks();
@@ -409,6 +427,14 @@ void run_task_finder(TaskService& service, const Config& config) {
             case ACT_CYCLE_STATUS:
                 report(service.set_status(task.id, next_status(task.status)));
                 break;
+            case ACT_MOVE_UP:
+                report(service.move_task(task.id, MoveDir::UP));     break;
+            case ACT_MOVE_DOWN:
+                report(service.move_task(task.id, MoveDir::DOWN));   break;
+            case ACT_MOVE_TOP:
+                report(service.move_task(task.id, MoveDir::TOP));    break;
+            case ACT_MOVE_BOTTOM:
+                report(service.move_task(task.id, MoveDir::BOTTOM)); break;
             case ACT_SHIFT_PLUS:  report(service.shift_due(task.id, 1)); break;
             case ACT_SHIFT_MINUS: report(service.shift_due(task.id, -1)); break;
             case ACT_ARCHIVE:     report(service.archive_task(task.id)); break;

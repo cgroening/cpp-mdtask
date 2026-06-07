@@ -134,6 +134,9 @@ serde::Value task_to_frontmatter(const Task& task) {
             "completed_at", serde::Value::string(*task.completed_at)
         );
     }
+    if(task.order) {
+        frontmatter.set("order", serde::Value::integer(*task.order));
+    }
     frontmatter.set("created", serde::Value::string(to_iso(task.created)));
     if(!task.project.empty()) {
         frontmatter.set("project", serde::Value::string(task.project));
@@ -178,6 +181,9 @@ Task document_to_task(const MarkdownDocument& document, const fs::path& path) {
     const std::string completed = string_or(frontmatter, "completed_at", "");
     if(!completed.empty()) {
         task.completed_at = completed;
+    }
+    if(const auto order = frontmatter.get("order").as_int()) {
+        task.order = static_cast<int>(*order);
     }
     task.created =
         parse_iso_date(string_or(frontmatter, "created", "")).value_or(today());

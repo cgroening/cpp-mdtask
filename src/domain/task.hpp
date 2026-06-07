@@ -55,6 +55,9 @@ struct Task {
     /** ISO timestamp recorded while the task is DONE (empty otherwise). */
     std::optional<std::string> completed_at;
 
+    /** Manual sort position within a finder section; empty sorts to the bottom. */
+    std::optional<int> order;
+
     /** Creation date (immutable once set). */
     std::chrono::year_month_day created{};
 

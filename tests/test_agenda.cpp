@@ -154,4 +154,29 @@ void run_agenda_tests() {
         CHECK(groups[3].header == "No completion date");
         CHECK(groups[3].tasks[0].title == "nodate");
     }
+
+    // Within a section: active by manual order (unset last), done by completion.
+    {
+        Task ord2 = make("ord2", today);
+        ord2.order = 2;
+        Task ord1 = make("ord1", today);
+        ord1.order = 1;
+        Task no_order = make("no-order", today);   // unset -> below ordered
+        Task done_old = make("done-old", today, Priority::NONE, true);
+        done_old.completed_at = "2026-06-05T10:00:00";
+        Task done_new = make("done-new", today, Priority::NONE, true);
+        done_new.completed_at = "2026-06-06T10:00:00";
+
+        const auto agenda = build_agenda(
+            {no_order, ord2, done_new, ord1, done_old}, today
+        );
+        CHECK(agenda.size() == 1);
+        const auto& tasks = agenda[0].tasks;
+        CHECK(tasks.size() == 5);
+        CHECK(tasks[0].title == "ord1");      // order 1
+        CHECK(tasks[1].title == "ord2");      // order 2
+        CHECK(tasks[2].title == "no-order");  // unset order -> after ordered
+        CHECK(tasks[3].title == "done-old");  // done, older completion first
+        CHECK(tasks[4].title == "done-new");
+    }
 }

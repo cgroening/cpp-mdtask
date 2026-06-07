@@ -1,5 +1,6 @@
 #include "service/task_service.hpp"
 
+#include "domain/agenda.hpp"
 #include "util/date.hpp"
 
 #include <sparcli.hpp>
@@ -63,6 +64,17 @@ void reconcile_completed_at(Task& task) {
 TaskService::TaskService(TaskRepository& repository)
     : repository_(repository) {}
 
+/** One past the largest order among active tasks, so a task lands last. */
+int TaskService::append_order() const {
+    int max = -1;
+    for(const auto& task : repository_.find_all()) {
+        if(task.status != Status::DONE && task.order) {
+            max = std::max(max, *task.order);
+        }
+    }
+    return max + 1;
+}
+
 Result<Task> TaskService::add_task(const NewTask& fields) {
     const std::string clean_title = trim(fields.title);
     if(clean_title.empty()) {
@@ -79,6 +91,7 @@ Result<Task> TaskService::add_task(const NewTask& fields) {
         .priority    = fields.priority,
         .someday     = fields.someday,
         .status      = Status::OPEN,
+        .order       = append_order(),   // new tasks land last in their section
         .created     = today(),
         .project     = fields.project,
     };
@@ -96,6 +109,11 @@ Result<Task> TaskService::update_task(Task task) {
     }
     task.title = clean_title;
     reconcile_completed_at(task);
+    // Changing the due date re-appends the task at the end of its new section.
+    if(const auto stored = repository_.find_by_id(task.id);
+       stored && stored->due != task.due) {
+        task.order = append_order();
+    }
     repository_.update(task);
     return task;
 }
@@ -123,6 +141,10 @@ Result<Task> TaskService::set_status(const std::string& id, Status status) {
         return std::unexpected(task_not_found_error(id));
     }
 
+    // Reopening a done task sends it to the end of its section's active tasks.
+    if(task->status == Status::DONE && status != Status::DONE) {
+        task->order = append_order();
+    }
     task->status = status;
     reconcile_completed_at(*task);
     repository_.update(*task);
@@ -155,8 +177,67 @@ Result<Task> TaskService::shift_due(const std::string& id, int days) {
     task->due = task->due ? shift_days(*task->due, days) : today();
     // Moving an Inbox task onto the calendar drops its someday flag.
     task->someday = false;
+    // The day changed, so re-append it under the other tasks of the new date.
+    task->order = append_order();
     repository_.update(*task);
     return *task;
+}
+
+Result<Task> TaskService::move_task(const std::string& id, MoveDir direction) {
+    const auto target = repository_.find_by_id(id);
+    if(!target) {
+        return std::unexpected(task_not_found_error(id));
+    }
+    if(target->status == Status::DONE) {
+        return *target;   // done tasks keep their completion order
+    }
+
+    // Collect the active tasks of the section the target is displayed in.
+    const auto agenda = build_agenda(repository_.find_all(), today());
+    std::vector<Task> active;
+    for(const auto& section : agenda) {
+        const bool here = std::ranges::any_of(
+            section.tasks, [&](const Task& t) { return t.id == id; }
+        );
+        if(here) {
+            for(const auto& candidate : section.tasks) {
+                if(candidate.status != Status::DONE) {
+                    active.push_back(candidate);
+                }
+            }
+            break;
+        }
+    }
+
+    const auto found = std::ranges::find(active, id, &Task::id);
+    if(found == active.end()) {
+        return *target;
+    }
+    const std::size_t i = static_cast<std::size_t>(found - active.begin());
+    std::size_t j = i;
+    switch(direction) {
+        case MoveDir::UP:     if(i > 0) { j = i - 1; } break;
+        case MoveDir::DOWN:   if(i + 1 < active.size()) { j = i + 1; } break;
+        case MoveDir::TOP:    j = 0; break;
+        case MoveDir::BOTTOM: j = active.size() - 1; break;
+    }
+    if(j == i) {
+        return *target;   // already at the edge
+    }
+
+    const Task moved = active[i];
+    active.erase(active.begin() + static_cast<std::ptrdiff_t>(i));
+    active.insert(active.begin() + static_cast<std::ptrdiff_t>(j), moved);
+
+    // Renumber the section's active tasks to 0..n-1, persisting what changed.
+    for(std::size_t k = 0; k < active.size(); ++k) {
+        const int want = static_cast<int>(k);
+        if(active[k].order != want) {
+            active[k].order = want;
+            repository_.update(active[k]);
+        }
+    }
+    return active[j];
 }
 
 Result<Task> TaskService::set_priority(
