@@ -295,6 +295,23 @@ RowIndex populate_archive(
     return rows;
 }
 
+/** Shows a message the user dismisses with OK (Enter). */
+void acknowledge(std::string_view message) {
+    const std::string text(message);
+    sparcli::Select dialog(sparcli::SelectOpts{
+        .prompt = text.c_str(),
+        .accent = sparcli::palette::purple(),
+        .box = {
+            .enabled = true,
+            .border = {.type = SC_BORDER_ROUNDED,
+                       .color = sparcli::palette::purple()},
+            .width_mode = SC_WIDTH_FULL,
+        },
+    });
+    dialog.add("OK");
+    static_cast<void>(dialog.run_one());
+}
+
 /** Opens a section picker; returns the chosen target's first-task id, or 0. */
 std::uint64_t run_section_jump(const std::vector<JumpTarget>& targets) {
     if(targets.size() < 2) {
@@ -513,15 +530,28 @@ void run_task_finder(TaskService& service, const Config& config) {
         const int action = shortcuts.fired();
 
         if(action == ACT_TOGGLE_LIST) {
+            // Switching into an empty list would open a finder with no rows and
+            // close immediately, so guard it and stay put with a message.
+            const bool to_notes = list_view == View::TASKS;
+            const bool target_empty = to_notes ? service.notes().empty()
+                                               : service.all_tasks().empty();
+            if(target_empty) {
+                acknowledge(
+                    to_notes
+                        ? "No notes yet. Tick 'Note' in the form to make one."
+                        : "No tasks yet."
+                );
+                continue;
+            }
             show_archive = false;
-            list_view = list_view == View::TASKS ? View::NOTES : View::TASKS;
+            list_view = to_notes ? View::NOTES : View::TASKS;
             focus = 0;
             continue;
         }
 
         if(action == ACT_TOGGLE_ARCHIVE) {
             if(!show_archive && service.archived_tasks().empty()) {
-                sparcli::alert::warning("No archived items yet.");
+                acknowledge("No archived items yet.");
                 continue;
             }
             show_archive = !show_archive;
