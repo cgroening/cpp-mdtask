@@ -79,6 +79,40 @@ struct RowIndex {
     std::unordered_map<std::uint64_t, std::size_t> index_by_id;
 };
 
+/**
+ * Picks which task to focus after deleting the row at `cursor`, so the cursor
+ * stays put instead of jumping to the top: the row that slides up into the gap
+ * (next in the same section), else the row above in the section, else the first
+ * row of the next section, else the nearest row of the previous section.
+ *
+ * @return The focus id of the chosen task, or 0 when nothing is left.
+ */
+std::uint64_t focus_after_delete(const RowIndex& rows, std::size_t cursor) {
+    const auto& by_index = rows.by_index;
+    const std::size_t count = by_index.size();
+
+    // Tasks of one section are contiguous; a neighbour task means same section.
+    if(cursor + 1 < count && by_index[cursor + 1]) {
+        return row_id(by_index[cursor + 1]->id);
+    }
+    if(cursor > 0 && by_index[cursor - 1]) {
+        return row_id(by_index[cursor - 1]->id);
+    }
+    // The section is now empty: first task of the next section...
+    for(std::size_t i = cursor + 1; i < count; ++i) {
+        if(by_index[i]) {
+            return row_id(by_index[i]->id);
+        }
+    }
+    // ...otherwise the nearest task in a previous section.
+    for(std::size_t i = cursor; i-- > 0;) {
+        if(by_index[i]) {
+            return row_id(by_index[i]->id);
+        }
+    }
+    return 0;
+}
+
 /** Adds one task row to the finder and records it in `rows` at `index`. */
 void add_task_row(
     sparcli::Fuzzy& finder,
@@ -425,8 +459,9 @@ void run_task_finder(TaskService& service, const Config& config) {
         if(action == ACT_DELETE) {
             if(sparcli::confirm("Delete this task permanently?")
                    .value_or(false)) {
+                // Keep the cursor near the gap instead of jumping to the top.
+                focus = focus_after_delete(rows, cursor);
                 report(service.delete_task(task.id));
-                focus = 0;
                 if(show_archive && service.archived_tasks().empty()) {
                     show_archive = false;
                 }
