@@ -155,6 +155,14 @@ sparcli::TextStyle status_style(const Task& task, bool overdue) {
     return sparcli::style(SC_TEXT_ATTR_DIM);
 }
 
+std::string note_symbol(const Task& task) {
+    return task.note ? "\xe2\x9c\x8e" : " ";   // ✎
+}
+
+sparcli::TextStyle note_style() {
+    return sparcli::style(SC_TEXT_ATTR_NONE, sparcli::palette::cyan());
+}
+
 std::string status_label(Status status) {
     switch(status) {
         case Status::IN_PROGRESS: return "In progress";

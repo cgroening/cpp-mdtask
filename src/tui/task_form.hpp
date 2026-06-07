@@ -9,14 +9,15 @@
 namespace mdtask {
 
 /**
- * Opens an interactive form to create a new task and stores it.
+ * Opens an interactive form to create a new task (or note) and stores it.
  *
- * @param service Service used to persist the task.
+ * @param service Service used to persist the item.
  * @param config  Provides the editor for the multiline description field.
- * @return The created task, or std::nullopt when cancelled or invalid.
+ * @param note    Whether the Note checkbox starts checked (create a note).
+ * @return The created item, or std::nullopt when cancelled or invalid.
  */
 [[nodiscard]] std::optional<Task> run_new_task_form(
-    TaskService& service, const Config& config
+    TaskService& service, const Config& config, bool note = false
 );
 
 /**

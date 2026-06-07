@@ -22,6 +22,7 @@ struct NewTask {
     Priority priority = Priority::NONE;               /**< Priority bucket. */
     bool someday = false;                             /**< Mark as someday. */
     std::string project;                              /**< Optional project. */
+    bool note = false;                                /**< Create as a note. */
 };
 
 /**
@@ -63,8 +64,11 @@ public:
      */
     [[nodiscard]] Result<Task> update_task(Task task);
 
-    /** Returns all tasks (active set). */
+    /** Returns all tasks (active set, notes excluded). */
     [[nodiscard]] std::vector<Task> all_tasks() const;
+
+    /** Returns all active notes. */
+    [[nodiscard]] std::vector<Task> notes() const;
 
     /** Returns the archived tasks (moved out of the active set). */
     [[nodiscard]] std::vector<Task> archived_tasks() const;
@@ -152,8 +156,9 @@ public:
     [[nodiscard]] Result<Task> delete_task(const std::string& id);
 
 private:
-    /** One past the largest order among active tasks (places a task last). */
-    [[nodiscard]] int append_order() const;
+    /** One past the largest order among the matching active list (tasks or
+        notes), so an item lands last in its own list. */
+    [[nodiscard]] int append_order(bool note) const;
 
     TaskRepository& repository_;
 };

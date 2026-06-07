@@ -61,6 +61,12 @@ namespace mdtask::presentation {
 /** Plain status name ("Open", "In progress", "Done"). */
 [[nodiscard]] std::string status_label(Status status);
 
+/** Marker glyph for a note ("✎"), or blank for a regular task. */
+[[nodiscard]] std::string note_symbol(const Task& task);
+
+/** Color/attributes for the note marker cell. */
+[[nodiscard]] sparcli::TextStyle note_style();
+
 /** Symbol + text for the form's status select (e.g. "◐ In progress"). */
 [[nodiscard]] std::string status_choice(Status status);
 

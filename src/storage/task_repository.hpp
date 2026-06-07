@@ -28,9 +28,16 @@ public:
     [[nodiscard]] virtual std::vector<Task> find_all() const = 0;
 
     /**
-     * Returns all archived tasks (those moved out of the active set).
+     * Returns all active notes (the quick-note items).
      *
-     * @return Archived tasks; empty vector when none have been archived.
+     * @return Notes; empty vector when none exist.
+     */
+    [[nodiscard]] virtual std::vector<Task> find_notes() const = 0;
+
+    /**
+     * Returns all archived items (tasks and notes), each flagged via `note`.
+     *
+     * @return Archived items; empty vector when none have been archived.
      */
     [[nodiscard]] virtual std::vector<Task> find_archived() const = 0;
 

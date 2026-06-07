@@ -7,10 +7,12 @@
 #include <sparcli.hpp>
 
 #include <cctype>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace mdtask {
 
@@ -123,6 +125,17 @@ serde::Value task_to_frontmatter(const Task& task) {
     serde::Value frontmatter = serde::Value::object();
     frontmatter.set("id", serde::Value::string(task.id));
     frontmatter.set("title", serde::Value::string(task.title));
+
+    // A note carries only id, title, order and created (plus the body); the
+    // task-specific fields are omitted entirely.
+    if(task.note) {
+        if(task.order) {
+            frontmatter.set("order", serde::Value::integer(*task.order));
+        }
+        frontmatter.set("created", serde::Value::string(to_iso(task.created)));
+        return frontmatter;
+    }
+
     if(task.due) {
         frontmatter.set("due", serde::Value::string(to_iso(*task.due)));
     }
@@ -275,19 +288,50 @@ std::string task_filename(const Task& task) {
 }
 
 MarkdownTaskRepository::MarkdownTaskRepository(
-    std::filesystem::path tasks_dir, std::filesystem::path archive_dir
+    std::filesystem::path tasks_dir,
+    std::filesystem::path notes_dir,
+    std::filesystem::path archive_dir,
+    std::filesystem::path notes_archive_dir
 )
     : tasks_dir_(std::move(tasks_dir)),
-      archive_dir_(std::move(archive_dir)) {}
+      notes_dir_(std::move(notes_dir)),
+      archive_dir_(std::move(archive_dir)),
+      notes_archive_dir_(std::move(notes_archive_dir)) {}
+
+const fs::path& MarkdownTaskRepository::active_dir(bool note) const {
+    return note ? notes_dir_ : tasks_dir_;
+}
+
+const fs::path& MarkdownTaskRepository::archive_root(bool note) const {
+    return note ? notes_archive_dir_ : archive_dir_;
+}
+
+namespace {
+
+/** First file under `paths` whose front-matter id matches, or nullopt. */
+std::optional<fs::path> find_path_by_id(
+    const std::vector<fs::path>& paths, const std::string& id
+) {
+    for(const auto& path : paths) {
+        if(read_id_of(path) == id) {
+            return path;
+        }
+    }
+    return std::nullopt;
+}
+
+}  // namespace
 
 std::vector<Task> MarkdownTaskRepository::load_tasks(
-    const std::vector<fs::path>& paths
+    const std::vector<fs::path>& paths, bool note
 ) {
     std::vector<Task> tasks;
     for(const auto& path : paths) {
         try {
             if(const auto document = read_markdown(path)) {
-                tasks.push_back(document_to_task(*document, path));
+                Task task = document_to_task(*document, path);
+                task.note = note;   // note-ness comes from the storage location
+                tasks.push_back(std::move(task));
             }
         } catch(const StorageError& error) {
             sparcli::logging::warn(
@@ -304,12 +348,23 @@ std::vector<Task> MarkdownTaskRepository::load_tasks(
 
 std::vector<Task> MarkdownTaskRepository::find_all() const {
     // Non-recursive: archived files live under archive_dir_ and stay excluded.
-    return load_tasks(list_markdown_files(tasks_dir_));
+    return load_tasks(list_markdown_files(tasks_dir_), false);
+}
+
+std::vector<Task> MarkdownTaskRepository::find_notes() const {
+    return load_tasks(list_markdown_files(notes_dir_), true);
 }
 
 std::vector<Task> MarkdownTaskRepository::find_archived() const {
-    // Archived files are nested under archive/<year>/<month>/, so scan deeply.
-    return load_tasks(list_markdown_files_recursive(archive_dir_));
+    // Archived files are nested under <archive>/<year>/<month>/, so scan deeply;
+    // tasks and notes have separate archive trees and are merged here.
+    std::vector<Task> items =
+        load_tasks(list_markdown_files_recursive(archive_dir_), false);
+    auto notes = load_tasks(list_markdown_files_recursive(notes_archive_dir_),
+                            true);
+    items.insert(items.end(), std::make_move_iterator(notes.begin()),
+                 std::make_move_iterator(notes.end()));
+    return items;
 }
 
 std::optional<Task> MarkdownTaskRepository::find_by_id(
@@ -320,6 +375,11 @@ std::optional<Task> MarkdownTaskRepository::find_by_id(
             return task;
         }
     }
+    for(auto& note : find_notes()) {
+        if(note.id == id) {
+            return note;
+        }
+    }
     return std::nullopt;
 }
 
@@ -328,26 +388,28 @@ void MarkdownTaskRepository::save(const Task& task) {
 }
 
 void MarkdownTaskRepository::update(const Task& task) {
-    // Find the task's current file (if any) so a changed due date or title can
-    // be realized as a rename rather than a stray duplicate.
-    std::optional<fs::path> existing;
-    for(const auto& path : list_markdown_files(tasks_dir_)) {
-        if(read_id_of(path) == task.id) {
-            existing = path;
-            break;
-        }
+    // Find the item's current file in either active dir, so a changed due date,
+    // title, or note flag is realized as a rename/move, not a stray duplicate.
+    std::optional<fs::path> existing =
+        find_path_by_id(list_markdown_files(tasks_dir_), task.id);
+    if(!existing) {
+        existing = find_path_by_id(list_markdown_files(notes_dir_), task.id);
     }
 
+    const fs::path& dir = active_dir(task.note);
+    std::error_code error;
+    fs::create_directories(dir, error);
+
     // Pick a unique target name, treating a file that already belongs to this
-    // task as a non-collision.
+    // item as a non-collision.
     const std::string base = task_filename(task);
     const std::string prefix = base.substr(0, base.size() - 3);  // drop ".md"
-    fs::path target = tasks_dir_ / base;
+    fs::path target = dir / base;
     for(int suffix = 2; fs::exists(target); ++suffix) {
         if(read_id_of(target) == task.id) {
             break;
         }
-        target = tasks_dir_ / (prefix + "-" + std::to_string(suffix) + ".md");
+        target = dir / (prefix + "-" + std::to_string(suffix) + ".md");
     }
 
     write_markdown(target, task_to_frontmatter(task), compose_body(task));
@@ -356,26 +418,20 @@ void MarkdownTaskRepository::update(const Task& task) {
     // task's link inside its project file. Links use the stable front-matter
     // `id`, so this is safe today; revisit when path-based links are added.
     if(existing && *existing != target) {
-        std::error_code error;
         fs::remove(*existing, error);
     }
     sparcli::logging::info("saved task " + task.id);
 }
 
 void MarkdownTaskRepository::archive(const Task& task) {
-    std::optional<fs::path> existing;
-    for(const auto& path : list_markdown_files(tasks_dir_)) {
-        if(read_id_of(path) == task.id) {
-            existing = path;
-            break;
-        }
-    }
+    std::optional<fs::path> existing =
+        find_path_by_id(list_markdown_files(active_dir(task.note)), task.id);
     if(!existing) {
         return;
     }
 
     const auto [year, month] = archive_year_month(task);
-    const fs::path dest_dir = archive_dir_ / year / month;
+    const fs::path dest_dir = archive_root(task.note) / year / month;
     std::error_code error;
     fs::create_directories(dest_dir, error);
     if(error) {
@@ -404,28 +460,25 @@ void MarkdownTaskRepository::archive(const Task& task) {
 }
 
 void MarkdownTaskRepository::unarchive(const Task& task) {
-    // Locate the archived file by id anywhere under the archive tree.
-    std::optional<fs::path> source;
-    for(const auto& path : list_markdown_files_recursive(archive_dir_)) {
-        if(read_id_of(path) == task.id) {
-            source = path;
-            break;
-        }
-    }
+    // Locate the archived file by id under its archive tree (task vs note).
+    std::optional<fs::path> source = find_path_by_id(
+        list_markdown_files_recursive(archive_root(task.note)), task.id
+    );
     if(!source) {
         return;
     }
 
-    // Pick a unique target name in the active directory (mirrors update()).
+    // Pick a unique target name in the matching active directory.
+    const fs::path& dir = active_dir(task.note);
     const std::string base = task_filename(task);
     const std::string prefix = base.substr(0, base.size() - 3);  // drop ".md"
-    fs::path target = tasks_dir_ / base;
+    fs::path target = dir / base;
     for(int suffix = 2; fs::exists(target); ++suffix) {
-        target = tasks_dir_ / (prefix + "-" + std::to_string(suffix) + ".md");
+        target = dir / (prefix + "-" + std::to_string(suffix) + ".md");
     }
 
     std::error_code error;
-    fs::create_directories(tasks_dir_, error);
+    fs::create_directories(dir, error);
     fs::rename(*source, target, error);
     if(error) {
         // Fall back to copy+remove when the active dir is on another filesystem.
@@ -440,22 +493,21 @@ void MarkdownTaskRepository::unarchive(const Task& task) {
 }
 
 void MarkdownTaskRepository::remove(const Task& task) {
-    // The task may live in the active dir or anywhere under the archive tree.
-    std::optional<fs::path> path;
-    for(const auto& candidate : list_markdown_files(tasks_dir_)) {
-        if(read_id_of(candidate) == task.id) {
-            path = candidate;
-            break;
-        }
+    // The item may live in any of the four trees; search them all by id.
+    std::optional<fs::path> path =
+        find_path_by_id(list_markdown_files(tasks_dir_), task.id);
+    if(!path) {
+        path = find_path_by_id(list_markdown_files(notes_dir_), task.id);
     }
     if(!path) {
-        for(const auto& candidate :
-            list_markdown_files_recursive(archive_dir_)) {
-            if(read_id_of(candidate) == task.id) {
-                path = candidate;
-                break;
-            }
-        }
+        path = find_path_by_id(
+            list_markdown_files_recursive(archive_dir_), task.id
+        );
+    }
+    if(!path) {
+        path = find_path_by_id(
+            list_markdown_files_recursive(notes_archive_dir_), task.id
+        );
     }
     if(!path) {
         return;

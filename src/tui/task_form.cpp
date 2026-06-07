@@ -110,19 +110,25 @@ struct FormResult {
     std::string title;
     std::string description;
     std::optional<std::chrono::year_month_day> due;
-    Priority priority;
-    bool someday;
-    Status status;
+    Priority priority = Priority::NONE;
+    bool someday = false;
+    Status status = Status::OPEN;
+    bool note = false;
 };
 
 /**
- * Builds and runs the task form, seeded from `existing` when editing.
+ * Builds and runs the task/note form, seeded from `existing` when editing.
  *
- * @return The entered fields, or std::nullopt when the user cancels.
+ * A note layout (Title, Note, Description) is used when the item is a note;
+ * otherwise the full task layout. `note_default` seeds the Note checkbox for a
+ * new item.
+ *
+ * @return The entered fields, or std::nullopt when the user cancels/discards.
  */
 std::optional<FormResult> run_task_form(
-    const Config& config, const Task* existing
+    const Config& config, const Task* existing, bool note_default
 ) {
+    const bool is_note = existing ? existing->note : note_default;
     const std::string editor = resolve_editor(config);
     // A zeroed seed leaves the field empty (no due date) and opens the picker
     // at today; an existing due date pre-selects that day.
@@ -156,7 +162,7 @@ std::optional<FormResult> run_task_form(
         }
     } else {
         head.append(
-            "new task",
+            is_note ? "new note" : "new task",
             sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::green())
         );
     }
@@ -166,8 +172,8 @@ std::optional<FormResult> run_task_form(
         // Magenta highlights the active cell and the inline editor panel.
         .accent = sparcli::palette::magenta(),
         .hide_summary = true,          // no "Form saved" line after submit
-        // For a new task, open the title editor right away; when editing an
-        // existing task, start in navigation mode.
+        // For a new item, open the title editor right away; when editing,
+        // start in navigation mode.
         .autoedit = existing == nullptr,
         .editor = editor.c_str(),
         .fullscreen = true,            // share the finder's alternate screen
@@ -176,39 +182,54 @@ std::optional<FormResult> run_task_form(
         .modified_marker = "[*] ",     // flag changed fields in their box title
     });
 
+    // A note's grid is single-column; a task's title/description span 3.
+    const int wide_span = is_note ? 1 : 3;
+
     form.row_begin();
     const int title_id = form.add_text(
         "Title", existing ? existing->title : "",
-        {.width_mode = SC_FWIDTH_AUTO, .col_span = 3, .required = true}
+        {.width_mode = SC_FWIDTH_AUTO, .col_span = wide_span, .required = true}
     );
 
-    form.row_begin();
-    const int priority_id = form.add_select(
-        "Priority", PRIORITY_CHOICES,
-        existing ? priority_to_index(existing->priority) : 0,
-        {.width_mode = SC_FWIDTH_PCT, .width = 33}
-    );
-    const int due_id = form.add_date(
-        "Due", due_initial,
-        {.width_mode = SC_FWIDTH_PCT, .width = 34, .date_optional = true,
-         .help = "enter picks a date, del clears it"}
-    );
-    const int someday_id = form.add_bool(
-        "Someday", existing ? existing->someday : false,
-        {.width_mode = SC_FWIDTH_AUTO}
-    );
+    // Task-only fields: priority, due, someday, status.
+    int priority_id = -1;
+    int due_id = -1;
+    int someday_id = -1;
+    int status_id = -1;
+    if(!is_note) {
+        form.row_begin();
+        priority_id = form.add_select(
+            "Priority", PRIORITY_CHOICES,
+            existing ? priority_to_index(existing->priority) : 0,
+            {.width_mode = SC_FWIDTH_PCT, .width = 33}
+        );
+        due_id = form.add_date(
+            "Due", due_initial,
+            {.width_mode = SC_FWIDTH_PCT, .width = 34, .date_optional = true,
+             .help = "enter picks a date, del clears it"}
+        );
+        someday_id = form.add_bool(
+            "Someday", existing ? existing->someday : false,
+            {.width_mode = SC_FWIDTH_AUTO}
+        );
+
+        form.row_begin();
+        status_id = form.add_select(
+            "Status", STATUS_CHOICES,
+            existing ? status_to_index(existing->status) : 0,
+            {.width_mode = SC_FWIDTH_PCT, .width = 33}
+        );
+    }
 
     form.row_begin();
-    const int status_id = form.add_select(
-        "Status", STATUS_CHOICES,
-        existing ? status_to_index(existing->status) : 0,
-        {.width_mode = SC_FWIDTH_PCT, .width = 33}
+    const int note_id = form.add_bool(
+        "Note", is_note, {.width_mode = SC_FWIDTH_AUTO}
     );
 
     form.row_begin();
     const int description_id = form.add_text(
         "Description", existing ? existing->description : "",
-        {.width_mode = SC_FWIDTH_AUTO, .col_span = 3, .height = 6,
+        {.width_mode = SC_FWIDTH_AUTO, .col_span = wide_span, .height = 6,
          .multiline = true, .help = "ctrl-g opens the editor"}
     );
 
@@ -226,14 +247,17 @@ std::optional<FormResult> run_task_form(
     FormResult result;
     result.title = std::string(form.get_string(title_id));
     result.description = std::string(form.get_string(description_id));
-    result.priority = priority_from_index(form.get_choice(priority_id));
-    result.someday = form.get_bool(someday_id);
-    result.status = status_from_index(form.get_choice(status_id));
+    result.note = form.get_bool(note_id);
 
-    // An empty / cleared date field means "no due date" (an Inbox task).
-    if(const auto picked = form.get_date(due_id);
-       picked && !sparcli::date_empty(*picked)) {
-        result.due = from_tm(*picked);
+    // Task-only fields are read only when present; a note keeps the defaults.
+    if(!is_note) {
+        result.priority = priority_from_index(form.get_choice(priority_id));
+        result.someday = form.get_bool(someday_id);
+        result.status = status_from_index(form.get_choice(status_id));
+        if(const auto picked = form.get_date(due_id);
+           picked && !sparcli::date_empty(*picked)) {
+            result.due = from_tm(*picked);
+        }
     }
     return result;
 }
@@ -241,9 +265,9 @@ std::optional<FormResult> run_task_form(
 }  // namespace
 
 std::optional<Task> run_new_task_form(
-    TaskService& service, const Config& config
+    TaskService& service, const Config& config, bool note
 ) {
-    const auto fields = run_task_form(config, nullptr);
+    const auto fields = run_task_form(config, nullptr, note);
     if(!fields) {
         return std::nullopt;
     }
@@ -254,13 +278,15 @@ std::optional<Task> run_new_task_form(
         .due         = fields->due,
         .priority    = fields->priority,
         .someday     = fields->someday,
+        .note        = fields->note,
     });
     if(!created) {
         sparcli::alert::warning(created.error().message);
         return std::nullopt;
     }
-    // A new task starts open; honor a non-default status chosen in the form.
-    if(fields->status != Status::OPEN) {
+    // A new task starts open; honor a non-default status chosen in the form
+    // (notes have no status).
+    if(!fields->note && fields->status != Status::OPEN) {
         if(const auto updated = service.set_status(created->id, fields->status)) {
             return *updated;
         }
@@ -271,7 +297,7 @@ std::optional<Task> run_new_task_form(
 std::optional<Task> run_edit_task_form(
     TaskService& service, const Config& config, const Task& task
 ) {
-    const auto fields = run_task_form(config, &task);
+    const auto fields = run_task_form(config, &task, task.note);
     if(!fields) {
         return std::nullopt;
     }
@@ -283,6 +309,7 @@ std::optional<Task> run_edit_task_form(
     updated.priority = fields->priority;
     updated.someday = fields->someday;
     updated.status = fields->status;
+    updated.note = fields->note;
 
     const auto saved = service.update_task(updated);
     if(!saved) {

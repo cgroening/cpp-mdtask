@@ -111,14 +111,27 @@ Result<Config> load_config() {
     if(archive_dir.empty()) {
         archive_dir = tasks_dir / "archive";
     }
+    // Notes live next to the tasks directory (e.g. .../mdtask/notes) with their
+    // own archive subfolder, unless explicitly configured.
+    std::filesystem::path notes_dir = layered->get_string("notes_dir");
+    if(notes_dir.empty()) {
+        notes_dir = tasks_dir.parent_path() / "notes";
+    }
+    std::filesystem::path notes_archive_dir =
+        layered->get_string("notes_archive_dir");
+    if(notes_archive_dir.empty()) {
+        notes_archive_dir = notes_dir / "archive";
+    }
 
     return Config{
-        .log_level   = level->second,
-        .tasks_dir   = tasks_dir,
-        .archive_dir = archive_dir,
-        .log_file    = layered->get_string("log_file"),
-        .date_format = format->second,
-        .editor      = layered->get_string("editor"),
+        .log_level          = level->second,
+        .tasks_dir          = tasks_dir,
+        .notes_dir          = notes_dir,
+        .archive_dir        = archive_dir,
+        .notes_archive_dir  = notes_archive_dir,
+        .log_file           = layered->get_string("log_file"),
+        .date_format        = format->second,
+        .editor             = layered->get_string("editor"),
     };
 }
 

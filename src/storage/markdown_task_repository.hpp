@@ -24,14 +24,20 @@ namespace mdtask {
 class MarkdownTaskRepository : public TaskRepository {
 public:
     /**
-     * @param tasks_dir   Directory holding the active task files.
-     * @param archive_dir Root directory for archived task files.
+     * @param tasks_dir          Directory holding the active task files.
+     * @param notes_dir          Directory holding the active note files.
+     * @param archive_dir        Root directory for archived task files.
+     * @param notes_archive_dir  Root directory for archived note files.
      */
     MarkdownTaskRepository(
-        std::filesystem::path tasks_dir, std::filesystem::path archive_dir
+        std::filesystem::path tasks_dir,
+        std::filesystem::path notes_dir,
+        std::filesystem::path archive_dir,
+        std::filesystem::path notes_archive_dir
     );
 
     [[nodiscard]] std::vector<Task> find_all() const override;
+    [[nodiscard]] std::vector<Task> find_notes() const override;
     [[nodiscard]] std::vector<Task> find_archived() const override;
     [[nodiscard]] std::optional<Task> find_by_id(
         const std::string& id
@@ -43,13 +49,20 @@ public:
     void remove(const Task& task) override;
 
 private:
-    /** Reads and parses the tasks at `paths`, skipping unreadable files. */
+    /** Reads and parses the items at `paths`, stamping each with `note`. */
     [[nodiscard]] static std::vector<Task> load_tasks(
-        const std::vector<std::filesystem::path>& paths
+        const std::vector<std::filesystem::path>& paths, bool note
     );
 
+    /** Active directory an item belongs in, by its note flag. */
+    [[nodiscard]] const std::filesystem::path& active_dir(bool note) const;
+    /** Archive root an item belongs in, by its note flag. */
+    [[nodiscard]] const std::filesystem::path& archive_root(bool note) const;
+
     std::filesystem::path tasks_dir_;
+    std::filesystem::path notes_dir_;
     std::filesystem::path archive_dir_;
+    std::filesystem::path notes_archive_dir_;
 };
 
 /**

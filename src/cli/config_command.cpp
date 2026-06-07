@@ -58,7 +58,9 @@ int ConfigCommand::run(const sparcli::Args& args) {
         config_file ? *config_file : "(not resolvable)"
     );
     values.add("Tasks dir", config_.tasks_dir.string());
+    values.add("Notes dir", config_.notes_dir.string());
     values.add("Archive dir", config_.archive_dir.string());
+    values.add("Notes archive dir", config_.notes_archive_dir.string());
     values.add(
         "Date format",
         config_.date_format == DateFormat::ISO ? "iso (YYYY-MM-DD)"

@@ -65,6 +65,13 @@ struct Task {
     /** Manual sort position within a finder section; empty sorts to the bottom. */
     std::optional<int> order;
 
+    /**
+     * True for a quick note: a dateless, status-less item kept in the notes
+     * directory and shown only in the Notes view. Derived from the storage
+     * location, not serialized.
+     */
+    bool note = false;
+
     /** Creation date (immutable once set). */
     std::chrono::year_month_day created{};
 

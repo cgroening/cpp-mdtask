@@ -26,8 +26,14 @@ struct Config {
     /** Directory holding the active task Markdown files. */
     std::filesystem::path tasks_dir;
 
+    /** Directory holding the active note Markdown files. */
+    std::filesystem::path notes_dir;
+
     /** Root directory for archived task files. */
     std::filesystem::path archive_dir;
+
+    /** Root directory for archived note files. */
+    std::filesystem::path notes_archive_dir;
 
     /** Where the plain-text debug log is written (empty = no file log). */
     std::filesystem::path log_file;

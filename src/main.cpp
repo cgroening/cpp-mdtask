@@ -133,7 +133,8 @@ void setup_theme() {
 App make_app(Config config) {
     auto owned_config = std::make_unique<Config>(std::move(config));
     auto task_repository = std::make_unique<mdtask::MarkdownTaskRepository>(
-        owned_config->tasks_dir, owned_config->archive_dir
+        owned_config->tasks_dir, owned_config->notes_dir,
+        owned_config->archive_dir, owned_config->notes_archive_dir
     );
     auto task_service = std::make_unique<mdtask::TaskService>(
         *task_repository

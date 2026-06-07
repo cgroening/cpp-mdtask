@@ -19,6 +19,7 @@ namespace mdtask {
 class InMemoryTaskRepository : public TaskRepository {
 public:
     [[nodiscard]] std::vector<Task> find_all() const override;
+    [[nodiscard]] std::vector<Task> find_notes() const override;
     [[nodiscard]] std::vector<Task> find_archived() const override;
     [[nodiscard]] std::optional<Task> find_by_id(
         const std::string& id

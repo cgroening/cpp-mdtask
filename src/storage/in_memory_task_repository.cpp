@@ -5,7 +5,19 @@
 namespace mdtask {
 
 std::vector<Task> InMemoryTaskRepository::find_all() const {
-    return tasks_;
+    auto out = tasks_;
+    const auto drop = std::ranges::remove_if(out, &Task::note);
+    out.erase(drop.begin(), drop.end());
+    return out;
+}
+
+std::vector<Task> InMemoryTaskRepository::find_notes() const {
+    auto out = tasks_;
+    const auto drop = std::ranges::remove_if(out, [](const Task& task) {
+        return !task.note;
+    });
+    out.erase(drop.begin(), drop.end());
+    return out;
 }
 
 std::vector<Task> InMemoryTaskRepository::find_archived() const {

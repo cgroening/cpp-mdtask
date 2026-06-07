@@ -59,17 +59,29 @@ void reconcile_completed_at(Task& task) {
     }
 }
 
+/** Strips the task-only fields a note must not carry (kept: title, body). */
+void normalize_note(Task& task) {
+    task.due.reset();
+    task.priority = Priority::NONE;
+    task.someday = false;
+    task.status = Status::OPEN;
+    task.completed_at.reset();
+    task.project.clear();
+}
+
 }  // namespace
 
 TaskService::TaskService(TaskRepository& repository)
     : repository_(repository) {}
 
-/** One past the largest order among active tasks, so a task lands last. */
-int TaskService::append_order() const {
+/** One past the largest order among the matching active list, so an item lands
+    last in its own list (tasks and notes order independently). */
+int TaskService::append_order(bool note) const {
     int max = -1;
-    for(const auto& task : repository_.find_all()) {
-        if(!is_terminal(task.status) && task.order) {
-            max = std::max(max, *task.order);
+    const auto items = note ? repository_.find_notes() : repository_.find_all();
+    for(const auto& item : items) {
+        if(!is_terminal(item.status) && item.order) {
+            max = std::max(max, *item.order);
         }
     }
     return max + 1;
@@ -83,7 +95,7 @@ Result<Task> TaskService::add_task(const NewTask& fields) {
         );
     }
 
-    const Task task{
+    Task task{
         .id          = generate_id(),
         .title       = clean_title,
         .description = fields.description,
@@ -91,10 +103,14 @@ Result<Task> TaskService::add_task(const NewTask& fields) {
         .priority    = fields.priority,
         .someday     = fields.someday,
         .status      = Status::OPEN,
-        .order       = append_order(),   // new tasks land last in their section
+        .order       = append_order(fields.note),   // last in its own list
+        .note        = fields.note,
         .created     = today(),
         .project     = fields.project,
     };
+    if(task.note) {
+        normalize_note(task);
+    }
     repository_.save(task);
     sparcli::logging::info("added task " + task.id);
     return task;
@@ -108,11 +124,20 @@ Result<Task> TaskService::update_task(Task task) {
         );
     }
     task.title = clean_title;
-    reconcile_completed_at(task);
-    // Changing the due date re-appends the task at the end of its new section.
-    if(const auto stored = repository_.find_by_id(task.id);
-       stored && stored->due != task.due) {
-        task.order = append_order();
+
+    const auto stored = repository_.find_by_id(task.id);
+    if(task.note) {
+        normalize_note(task);   // a note sheds the task-only fields
+    } else {
+        reconcile_completed_at(task);
+    }
+
+    // Re-append at the end of the target list when the item moved lists (note
+    // toggled) or, for a task, changed its day.
+    const bool note_changed = stored && stored->note != task.note;
+    const bool due_changed = stored && stored->due != task.due;
+    if(note_changed || due_changed) {
+        task.order = append_order(task.note);
     }
     repository_.update(task);
     return task;
@@ -120,6 +145,10 @@ Result<Task> TaskService::update_task(Task task) {
 
 std::vector<Task> TaskService::all_tasks() const {
     return repository_.find_all();
+}
+
+std::vector<Task> TaskService::notes() const {
+    return repository_.find_notes();
 }
 
 std::vector<Task> TaskService::archived_tasks() const {
@@ -143,7 +172,7 @@ Result<Task> TaskService::set_status(const std::string& id, Status status) {
 
     // Reopening a terminal task sends it to the end of the active tasks.
     if(is_terminal(task->status) && !is_terminal(status)) {
-        task->order = append_order();
+        task->order = append_order(task->note);
     }
     task->status = status;
     reconcile_completed_at(*task);
@@ -178,7 +207,7 @@ Result<Task> TaskService::shift_due(const std::string& id, int days) {
     // Moving an Inbox task onto the calendar drops its someday flag.
     task->someday = false;
     // The day changed, so re-append it under the other tasks of the new date.
-    task->order = append_order();
+    task->order = append_order(task->note);
     repository_.update(*task);
     return *task;
 }
@@ -192,20 +221,37 @@ Result<Task> TaskService::move_task(const std::string& id, MoveDir direction) {
         return *target;   // terminal tasks keep their completion order
     }
 
-    // Collect the active tasks of the section the target is displayed in.
-    const auto agenda = build_agenda(repository_.find_all(), today());
+    // Collect the active items the target is displayed among: the whole notes
+    // list for a note, otherwise the agenda section the task sits in.
     std::vector<Task> active;
-    for(const auto& section : agenda) {
-        const bool here = std::ranges::any_of(
-            section.tasks, [&](const Task& t) { return t.id == id; }
-        );
-        if(here) {
-            for(const auto& candidate : section.tasks) {
-                if(!is_terminal(candidate.status)) {
-                    active.push_back(candidate);
-                }
+    if(target->note) {
+        for(const auto& note : repository_.find_notes()) {
+            if(!is_terminal(note.status)) {
+                active.push_back(note);
             }
-            break;
+        }
+        std::ranges::sort(active, [](const Task& a, const Task& b) {
+            if(a.order != b.order) {
+                if(!a.order) { return false; }
+                if(!b.order) { return true; }
+                return *a.order < *b.order;
+            }
+            return a.title < b.title;
+        });
+    } else {
+        const auto agenda = build_agenda(repository_.find_all(), today());
+        for(const auto& section : agenda) {
+            const bool here = std::ranges::any_of(
+                section.tasks, [&](const Task& t) { return t.id == id; }
+            );
+            if(here) {
+                for(const auto& candidate : section.tasks) {
+                    if(!is_terminal(candidate.status)) {
+                        active.push_back(candidate);
+                    }
+                }
+                break;
+            }
         }
     }
 

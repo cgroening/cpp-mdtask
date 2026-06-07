@@ -291,6 +291,41 @@ void run_service_tests() {
         CHECK(!service.delete_task("nope").has_value());
     }
 
+    // Notes live in their own list with their own order; converting strips the
+    // task-only fields and restores defaults the other way.
+    {
+        InMemoryTaskRepository repository;
+        TaskService service(repository);
+
+        const auto note = service.add_task({.title = "Idea", .note = true});
+        CHECK(note.has_value());
+        CHECK(note->note);
+        CHECK(service.notes().size() == 1);
+        CHECK(service.all_tasks().empty());          // notes excluded from tasks
+        CHECK(note->order.has_value());
+
+        // Convert the note to a task: defaults filled in, leaves the notes list.
+        Task as_task = *note;
+        as_task.note = false;
+        as_task.priority = Priority::HIGH;
+        CHECK(service.update_task(as_task).has_value());
+        CHECK(service.notes().empty());
+        CHECK(service.all_tasks().size() == 1);
+
+        // Convert a task to a note: due/priority/status are dropped.
+        const auto task = service.add_task(
+            {.title = "Buy milk", .due = ymd(2026, 6, 10),
+             .priority = Priority::HIGH}
+        );
+        Task as_note = *task;
+        as_note.note = true;
+        const auto converted = service.update_task(as_note);
+        CHECK(converted.has_value());
+        CHECK(converted->note);
+        CHECK(!converted->due.has_value());
+        CHECK(converted->priority == Priority::NONE);
+    }
+
     // open_tasks returns only tasks that are not done yet.
     {
         InMemoryTaskRepository repository;

@@ -67,11 +67,13 @@ void run_markdown_task_repository_tests() {
     std::error_code ec;
     fs::remove_all(dir, ec);
     const fs::path tasks_dir = dir / "tasks";
+    const fs::path notes_dir = dir / "notes";
     const fs::path archive_dir = dir / "archive";
+    const fs::path notes_archive_dir = dir / "notes-archive";
 
     // save then find_by_id round-trips every field through the file.
     {
-        MarkdownTaskRepository repository(tasks_dir, archive_dir);
+        MarkdownTaskRepository repository(tasks_dir, notes_dir, archive_dir, notes_archive_dir);
         repository.save(sample_task());
 
         CHECK(any_file_named(tasks_dir, "2026-06-05--pay-the-invoice.md"));
@@ -88,7 +90,7 @@ void run_markdown_task_repository_tests() {
 
     // Changing the due date renames the file rather than duplicating it.
     {
-        MarkdownTaskRepository repository(tasks_dir, archive_dir);
+        MarkdownTaskRepository repository(tasks_dir, notes_dir, archive_dir, notes_archive_dir);
         Task moved = sample_task();
         moved.due = ymd(2026, 6, 10);
         repository.update(moved);
@@ -100,7 +102,7 @@ void run_markdown_task_repository_tests() {
 
     // Archiving moves the file under archive/<year>/<month>/ by completion.
     {
-        MarkdownTaskRepository repository(tasks_dir, archive_dir);
+        MarkdownTaskRepository repository(tasks_dir, notes_dir, archive_dir, notes_archive_dir);
         Task done = sample_task();
         done.due = ymd(2026, 6, 10);
         done.status = Status::DONE;
@@ -132,7 +134,7 @@ void run_markdown_task_repository_tests() {
     // `status:`) is read as DONE.
     {
         fs::remove_all(dir, ec);
-        MarkdownTaskRepository repository(tasks_dir, archive_dir);
+        MarkdownTaskRepository repository(tasks_dir, notes_dir, archive_dir, notes_archive_dir);
 
         Task in_progress = sample_task();
         in_progress.status = Status::IN_PROGRESS;
@@ -151,7 +153,7 @@ void run_markdown_task_repository_tests() {
     // order round-trips; absent in the file means nullopt.
     {
         fs::remove_all(dir, ec);
-        MarkdownTaskRepository repository(tasks_dir, archive_dir);
+        MarkdownTaskRepository repository(tasks_dir, notes_dir, archive_dir, notes_archive_dir);
 
         Task task = sample_task();
         CHECK(!task.order.has_value());
@@ -166,7 +168,7 @@ void run_markdown_task_repository_tests() {
     // status: cancelled and paused round-trip.
     {
         fs::remove_all(dir, ec);
-        MarkdownTaskRepository repository(tasks_dir, archive_dir);
+        MarkdownTaskRepository repository(tasks_dir, notes_dir, archive_dir, notes_archive_dir);
         Task task = sample_task();
         task.status = Status::CANCELLED;
         repository.save(task);
@@ -180,7 +182,7 @@ void run_markdown_task_repository_tests() {
     // remove deletes an active file and an archived file.
     {
         fs::remove_all(dir, ec);
-        MarkdownTaskRepository repository(tasks_dir, archive_dir);
+        MarkdownTaskRepository repository(tasks_dir, notes_dir, archive_dir, notes_archive_dir);
 
         Task active = sample_task();
         repository.save(active);
@@ -195,6 +197,39 @@ void run_markdown_task_repository_tests() {
         CHECK(repository.find_archived().size() == 1);
         repository.remove(done);
         CHECK(repository.find_archived().empty());
+    }
+
+    // Notes route to the notes tree; toggling the note flag moves the file.
+    {
+        fs::remove_all(dir, ec);
+        MarkdownTaskRepository repository(
+            tasks_dir, notes_dir, archive_dir, notes_archive_dir
+        );
+
+        Task note = sample_task();
+        note.due = std::nullopt;
+        note.note = true;
+        repository.save(note);
+        CHECK(repository.find_all().empty());          // not in the task list
+        CHECK(repository.find_notes().size() == 1);
+        CHECK(any_file_named(notes_dir, "nodate--pay-the-invoice.md"));
+
+        // Archiving a note uses the notes archive tree.
+        repository.archive(note);
+        CHECK(repository.find_notes().empty());
+        const auto archived = repository.find_archived();
+        CHECK(archived.size() == 1);
+        CHECK(archived[0].note);
+        repository.unarchive(archived[0]);
+        CHECK(repository.find_notes().size() == 1);
+
+        // Converting the note to a task moves it into the tasks dir.
+        Task as_task = *repository.find_by_id("id000000");
+        as_task.note = false;
+        repository.update(as_task);
+        CHECK(repository.find_notes().empty());
+        CHECK(repository.find_all().size() == 1);
+        CHECK(!any_file_named(notes_dir, "nodate--pay-the-invoice.md"));
     }
 
     fs::remove_all(dir, ec);
