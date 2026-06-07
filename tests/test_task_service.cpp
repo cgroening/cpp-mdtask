@@ -242,6 +242,40 @@ void run_service_tests() {
         CHECK(reopened->order == 3);  // append over A's new order (2)
     }
 
+    // Cancelling is terminal: it records completed_at and leaves the open set.
+    {
+        InMemoryTaskRepository repository;
+        TaskService service(repository);
+
+        const auto created = service.add_task({.title = "Drop me"});
+        CHECK(created.has_value());
+
+        const auto cancelled =
+            service.set_status(created->id, Status::CANCELLED);
+        CHECK(cancelled.has_value());
+        CHECK(cancelled->status == Status::CANCELLED);
+        CHECK(cancelled->completed_at.has_value());
+        CHECK(service.open_tasks().empty());
+    }
+
+    // delete_task removes active and archived tasks; unknown ids error.
+    {
+        InMemoryTaskRepository repository;
+        TaskService service(repository);
+
+        const auto active = service.add_task({.title = "Active"});
+        CHECK(service.delete_task(active->id).has_value());
+        CHECK(service.all_tasks().empty());
+
+        const auto archived = service.add_task({.title = "Archived"});
+        CHECK(service.archive_task(archived->id).has_value());
+        CHECK(service.archived_tasks().size() == 1);
+        CHECK(service.delete_task(archived->id).has_value());
+        CHECK(service.archived_tasks().empty());
+
+        CHECK(!service.delete_task("nope").has_value());
+    }
+
     // open_tasks returns only tasks that are not done yet.
     {
         InMemoryTaskRepository repository;

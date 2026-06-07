@@ -19,7 +19,13 @@ enum class Status {
     OPEN,
     IN_PROGRESS,
     DONE,
+    CANCELLED,
 };
+
+/** True for terminal states (done or cancelled) that leave the active set. */
+[[nodiscard]] inline bool is_terminal(Status status) {
+    return status == Status::DONE || status == Status::CANCELLED;
+}
 
 /**
  * A single task: the central domain entity, backed by one Markdown file.

@@ -163,5 +163,35 @@ void run_markdown_task_repository_tests() {
         CHECK(repository.find_by_id("id000000")->order == 5);
     }
 
+    // status: cancelled round-trips.
+    {
+        fs::remove_all(dir, ec);
+        MarkdownTaskRepository repository(tasks_dir, archive_dir);
+        Task task = sample_task();
+        task.status = Status::CANCELLED;
+        repository.save(task);
+        CHECK(repository.find_by_id("id000000")->status == Status::CANCELLED);
+    }
+
+    // remove deletes an active file and an archived file.
+    {
+        fs::remove_all(dir, ec);
+        MarkdownTaskRepository repository(tasks_dir, archive_dir);
+
+        Task active = sample_task();
+        repository.save(active);
+        repository.remove(active);
+        CHECK(repository.find_all().empty());
+
+        Task done = sample_task();
+        done.status = Status::DONE;
+        done.completed_at = "2026-06-06T09:00:00";
+        repository.save(done);
+        repository.archive(done);
+        CHECK(repository.find_archived().size() == 1);
+        repository.remove(done);
+        CHECK(repository.find_archived().empty());
+    }
+
     fs::remove_all(dir, ec);
 }

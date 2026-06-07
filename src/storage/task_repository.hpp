@@ -77,6 +77,14 @@ public:
      * @throws StorageError when the task cannot be moved.
      */
     virtual void unarchive(const Task& task) = 0;
+
+    /**
+     * Permanently removes a task, whether active or archived.
+     *
+     * @param task The task to delete; unknown ids are ignored.
+     * @throws StorageError when the task cannot be removed.
+     */
+    virtual void remove(const Task& task) = 0;
 };
 
 }  // namespace mdtask

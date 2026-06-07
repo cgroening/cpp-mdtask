@@ -19,8 +19,8 @@ namespace {
  * completion time (newest-done last, then title).
  */
 bool section_less(const Task& a, const Task& b) {
-    const bool a_done = a.status == Status::DONE;
-    const bool b_done = b.status == Status::DONE;
+    const bool a_done = is_terminal(a.status);
+    const bool b_done = is_terminal(b.status);
     if(a_done != b_done) {
         return !a_done;   // active tasks come first
     }

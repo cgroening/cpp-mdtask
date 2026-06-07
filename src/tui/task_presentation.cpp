@@ -121,6 +121,7 @@ sparcli::TextStyle priority_style(Priority priority) {
 std::string status_symbol(const Task& task, bool overdue) {
     switch(task.status) {
         case Status::DONE:        return "\xe2\x9c\x93";          // ✓
+        case Status::CANCELLED:   return "\xe2\x8a\x98";          // ⊘
         case Status::IN_PROGRESS: return "\xe2\x97\x90";          // ◐
         case Status::OPEN:        break;
     }
@@ -130,6 +131,9 @@ std::string status_symbol(const Task& task, bool overdue) {
 sparcli::TextStyle status_style(const Task& task, bool overdue) {
     switch(task.status) {
         case Status::DONE:
+            return sparcli::style(SC_TEXT_ATTR_NONE, sparcli::palette::green());
+        case Status::CANCELLED:
+            // Own branch so it can diverge from done later; green for now.
             return sparcli::style(SC_TEXT_ATTR_NONE, sparcli::palette::green());
         case Status::IN_PROGRESS:
             return sparcli::style(
@@ -149,6 +153,7 @@ std::string status_label(Status status) {
     switch(status) {
         case Status::IN_PROGRESS: return "In progress";
         case Status::DONE:        return "Done";
+        case Status::CANCELLED:   return "Cancelled";
         case Status::OPEN:        break;
     }
     return "Open";
@@ -159,13 +164,14 @@ std::string status_choice(Status status) {
     switch(status) {
         case Status::IN_PROGRESS: return "\xe2\x97\x90 In progress";  // ◐
         case Status::DONE:        return "\xe2\x9c\x93 Done";         // ✓
+        case Status::CANCELLED:   return "\xe2\x8a\x98 Cancelled";    // ⊘
         case Status::OPEN:        break;
     }
     return "\xe2\x97\x8b Open";   // ○
 }
 
 sparcli::TextStyle title_style(const Task& task) {
-    if(task.status == Status::DONE) {
+    if(is_terminal(task.status)) {
         return sparcli::style(
             static_cast<ScTextAttribute>(SC_TEXT_ATTR_DIM | SC_TEXT_ATTR_STRIKE)
         );

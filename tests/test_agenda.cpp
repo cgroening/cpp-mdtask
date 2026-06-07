@@ -179,4 +179,22 @@ void run_agenda_tests() {
         CHECK(tasks[3].title == "done-old");  // done, older completion first
         CHECK(tasks[4].title == "done-new");
     }
+
+    // A cancelled task is terminal: it groups with done, ordered by completion.
+    {
+        Task open_task = make("still-open", today);
+        open_task.order = 1;
+        Task cancelled = make("cancelled", today);
+        cancelled.status = Status::CANCELLED;
+        cancelled.completed_at = "2026-06-05T08:00:00";
+        Task done = make("done", today, Priority::NONE, true);
+        done.completed_at = "2026-06-06T08:00:00";
+
+        const auto agenda = build_agenda({done, cancelled, open_task}, today);
+        CHECK(agenda.size() == 1);
+        const auto& tasks = agenda[0].tasks;
+        CHECK(tasks[0].title == "still-open");  // active first
+        CHECK(tasks[1].title == "cancelled");   // terminal, completed earlier
+        CHECK(tasks[2].title == "done");
+    }
 }

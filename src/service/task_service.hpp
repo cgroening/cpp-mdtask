@@ -143,6 +143,14 @@ public:
      */
     [[nodiscard]] Result<Task> restore_task(const std::string& id);
 
+    /**
+     * Permanently deletes a task (active or archived).
+     *
+     * @param id Id of the task to delete.
+     * @return The deleted task, or a NOT_FOUND error.
+     */
+    [[nodiscard]] Result<Task> delete_task(const std::string& id);
+
 private:
     /** One past the largest order among active tasks (places a task last). */
     [[nodiscard]] int append_order() const;

@@ -37,6 +37,8 @@ enum {
     ACT_MOVE_DOWN      = 11,
     ACT_MOVE_TOP       = 12,
     ACT_MOVE_BOTTOM    = 13,
+    ACT_CANCEL         = 14,
+    ACT_DELETE         = 15,
 };
 
 /** Builds an Alt(+Shift)+named-key chord for the reorder shortcuts. */
@@ -55,6 +57,7 @@ Status next_status(Status status) {
         case Status::OPEN:        return Status::IN_PROGRESS;
         case Status::IN_PROGRESS: return Status::DONE;
         case Status::DONE:        break;
+        case Status::CANCELLED:   break;   // cycling reopens a cancelled task
     }
     return Status::OPEN;
 }
@@ -86,16 +89,16 @@ void add_task_row(
     std::size_t& index
 ) {
     const bool overdue =
-        task.due && *task.due < today && task.status != Status::DONE;
+        task.due && *task.due < today && !is_terminal(task.status);
 
-    // The Due/Done column shows the completion date (green) for a done task,
-    // otherwise the due date (dim).
+    // The Due/Done column shows the completion date (green) for a terminal
+    // task, otherwise the due date (dim).
     const std::string completed = presentation::format_completed(
         task.completed_at, format
     );
     std::string due_done_text;
     sparcli::TextStyle due_done_style;
-    if(task.status == Status::DONE && !completed.empty()) {
+    if(is_terminal(task.status) && !completed.empty()) {
         due_done_text = completed;
         due_done_style = sparcli::style(
             SC_TEXT_ATTR_NONE, sparcli::palette::green()
@@ -305,11 +308,19 @@ void run_task_finder(TaskService& service, const Config& config) {
             shortcuts.on_return(
                 sparcli::key_char('v'), ACT_TOGGLE_ARCHIVE, "agenda"
             ).on_return(sparcli::key_char('r'), ACT_RESTORE, "restore")
-             .on_return(sparcli::key_char('s'), ACT_JUMP, "section");
+             .on_return(sparcli::key_char('s'), ACT_JUMP, "section")
+             .on_return(sparcli::key_special(SC_KEY_DELETE), ACT_DELETE,
+                        "delete")
+             .on_return(sparcli::key_special(SC_KEY_BACKSPACE), ACT_DELETE);
         } else {
             shortcuts.on_return(sparcli::key_char('d'), ACT_TOGGLE_DONE, "done")
                      .on_return(sparcli::key_char('p'), ACT_CYCLE_STATUS,
                                 "progress")
+                     .on_return(sparcli::key_char('c'), ACT_CANCEL, "cancel")
+                     .on_return(sparcli::key_special(SC_KEY_DELETE), ACT_DELETE,
+                                "delete")
+                     .on_return(sparcli::key_special(SC_KEY_BACKSPACE),
+                                ACT_DELETE)
                      .on_return(sparcli::key_char('+'), ACT_SHIFT_PLUS, "+1d")
                      .on_return(sparcli::key_char('='), ACT_SHIFT_PLUS)
                      .on_return(sparcli::key_char('-'), ACT_SHIFT_MINUS, "-1d")
@@ -410,6 +421,19 @@ void run_task_finder(TaskService& service, const Config& config) {
         const Task& task = *rows.by_index[cursor];
         focus = row_id(task.id);
 
+        // Delete works in both views, behind a confirm that defaults to No.
+        if(action == ACT_DELETE) {
+            if(sparcli::confirm("Delete this task permanently?")
+                   .value_or(false)) {
+                report(service.delete_task(task.id));
+                focus = 0;
+                if(show_archive && service.archived_tasks().empty()) {
+                    show_archive = false;
+                }
+            }
+            continue;
+        }
+
         // In the archive view the only mutating action is restoring a task
         // back into the agenda; everything else leaves it untouched.
         if(show_archive) {
@@ -426,6 +450,13 @@ void run_task_finder(TaskService& service, const Config& config) {
             case ACT_TOGGLE_DONE: report(service.toggle_done(task.id)); break;
             case ACT_CYCLE_STATUS:
                 report(service.set_status(task.id, next_status(task.status)));
+                break;
+            case ACT_CANCEL:
+                report(service.set_status(
+                    task.id,
+                    task.status == Status::CANCELLED ? Status::OPEN
+                                                     : Status::CANCELLED
+                ));
                 break;
             case ACT_MOVE_UP:
                 report(service.move_task(task.id, MoveDir::UP));     break;

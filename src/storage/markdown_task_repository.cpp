@@ -56,6 +56,7 @@ std::string_view status_to_string(Status status) {
     switch(status) {
         case Status::IN_PROGRESS: return "in_progress";
         case Status::DONE:        return "done";
+        case Status::CANCELLED:   return "cancelled";
         case Status::OPEN:        break;
     }
     return "open";
@@ -65,6 +66,7 @@ std::string_view status_to_string(Status status) {
 Status status_from_string(std::string_view text) {
     if(text == "in_progress") { return Status::IN_PROGRESS; }
     if(text == "done")        { return Status::DONE; }
+    if(text == "cancelled")   { return Status::CANCELLED; }
     return Status::OPEN;
 }
 
@@ -433,6 +435,36 @@ void MarkdownTaskRepository::unarchive(const Task& task) {
         fs::remove(*source, error);
     }
     sparcli::logging::info("restored task " + task.id);
+}
+
+void MarkdownTaskRepository::remove(const Task& task) {
+    // The task may live in the active dir or anywhere under the archive tree.
+    std::optional<fs::path> path;
+    for(const auto& candidate : list_markdown_files(tasks_dir_)) {
+        if(read_id_of(candidate) == task.id) {
+            path = candidate;
+            break;
+        }
+    }
+    if(!path) {
+        for(const auto& candidate :
+            list_markdown_files_recursive(archive_dir_)) {
+            if(read_id_of(candidate) == task.id) {
+                path = candidate;
+                break;
+            }
+        }
+    }
+    if(!path) {
+        return;
+    }
+
+    std::error_code error;
+    fs::remove(*path, error);
+    if(error) {
+        throw StorageError("Cannot delete task: " + path->string());
+    }
+    sparcli::logging::info("deleted task " + task.id);
 }
 
 }  // namespace mdtask

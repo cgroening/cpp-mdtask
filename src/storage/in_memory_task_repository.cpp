@@ -44,6 +44,14 @@ void InMemoryTaskRepository::archive(const Task& task) {
     tasks_.erase(removed.begin(), removed.end());
 }
 
+void InMemoryTaskRepository::remove(const Task& task) {
+    // Drop the task from whichever set holds it (active or archived).
+    const auto from_active = std::ranges::remove(tasks_, task.id, &Task::id);
+    tasks_.erase(from_active.begin(), from_active.end());
+    const auto from_archive = std::ranges::remove(archived_, task.id, &Task::id);
+    archived_.erase(from_archive.begin(), from_archive.end());
+}
+
 void InMemoryTaskRepository::unarchive(const Task& task) {
     // Move the task from the archive set back into the active set.
     if(const auto found = std::ranges::find(archived_, task.id, &Task::id);

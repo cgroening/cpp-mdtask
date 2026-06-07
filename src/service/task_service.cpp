@@ -50,7 +50,7 @@ std::string generate_id() {
  * (kept if it already has one), any other status clears it.
  */
 void reconcile_completed_at(Task& task) {
-    if(task.status == Status::DONE) {
+    if(is_terminal(task.status)) {
         if(!task.completed_at) {
             task.completed_at = now_timestamp();
         }
@@ -68,7 +68,7 @@ TaskService::TaskService(TaskRepository& repository)
 int TaskService::append_order() const {
     int max = -1;
     for(const auto& task : repository_.find_all()) {
-        if(task.status != Status::DONE && task.order) {
+        if(!is_terminal(task.status) && task.order) {
             max = std::max(max, *task.order);
         }
     }
@@ -129,7 +129,7 @@ std::vector<Task> TaskService::archived_tasks() const {
 std::vector<Task> TaskService::open_tasks() const {
     auto tasks = repository_.find_all();
     const auto removed = std::ranges::remove_if(tasks, [](const Task& task) {
-        return task.status == Status::DONE;
+        return is_terminal(task.status);
     });
     tasks.erase(removed.begin(), removed.end());
     return tasks;
@@ -141,8 +141,8 @@ Result<Task> TaskService::set_status(const std::string& id, Status status) {
         return std::unexpected(task_not_found_error(id));
     }
 
-    // Reopening a done task sends it to the end of its section's active tasks.
-    if(task->status == Status::DONE && status != Status::DONE) {
+    // Reopening a terminal task sends it to the end of the active tasks.
+    if(is_terminal(task->status) && !is_terminal(status)) {
         task->order = append_order();
     }
     task->status = status;
@@ -188,8 +188,8 @@ Result<Task> TaskService::move_task(const std::string& id, MoveDir direction) {
     if(!target) {
         return std::unexpected(task_not_found_error(id));
     }
-    if(target->status == Status::DONE) {
-        return *target;   // done tasks keep their completion order
+    if(is_terminal(target->status)) {
+        return *target;   // terminal tasks keep their completion order
     }
 
     // Collect the active tasks of the section the target is displayed in.
@@ -201,7 +201,7 @@ Result<Task> TaskService::move_task(const std::string& id, MoveDir direction) {
         );
         if(here) {
             for(const auto& candidate : section.tasks) {
-                if(candidate.status != Status::DONE) {
+                if(!is_terminal(candidate.status)) {
                     active.push_back(candidate);
                 }
             }
@@ -259,6 +259,25 @@ Result<Task> TaskService::archive_task(const std::string& id) {
     }
     repository_.archive(*task);
     sparcli::logging::info("archived task " + id);
+    return *task;
+}
+
+Result<Task> TaskService::delete_task(const std::string& id) {
+    // Look in the active set first, then the archive.
+    auto task = repository_.find_by_id(id);
+    if(!task) {
+        for(const auto& archived : repository_.find_archived()) {
+            if(archived.id == id) {
+                task = archived;
+                break;
+            }
+        }
+    }
+    if(!task) {
+        return std::unexpected(task_not_found_error(id));
+    }
+    repository_.remove(*task);
+    sparcli::logging::info("deleted task " + id);
     return *task;
 }
 
