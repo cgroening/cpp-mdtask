@@ -63,7 +63,7 @@ sparcli::TextStyle section_style(
         case SectionKind::OVERDUE:
             return bar(pal::red(), pal::red_dark());
         case SectionKind::INBOX:
-            return bar(pal::purple(), pal::purple_dark());
+            return bar(pal::yellow(), pal::yellow_dark());
         case SectionKind::WITHOUT_DATE:
             return bar(pal::fg_darken_2(), pal::bg_lighten_3());
         case SectionKind::DATED:
