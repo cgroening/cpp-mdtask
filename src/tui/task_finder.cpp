@@ -62,6 +62,7 @@ enum {
     ACT_MOVE_BOTTOM    = 13,
     ACT_TOGGLE_LIST    = 14,
     ACT_DELETE         = 15,
+    ACT_QUIT           = 16,
 };
 
 /** Builds an Alt(+Shift)+named-key chord for the reorder shortcuts. */
@@ -442,7 +443,8 @@ void run_task_finder(TaskService& service, const Config& config) {
             sparcli::key_char('b'), ACT_TOGGLE_ARCHIVE,
             show_archive ? "back" : "archive"
         ).on_return(sparcli::key_special(SC_KEY_DELETE), ACT_DELETE, "delete")
-         .on_return(sparcli::key_special(SC_KEY_BACKSPACE), ACT_DELETE);
+         .on_return(sparcli::key_special(SC_KEY_BACKSPACE), ACT_DELETE)
+         .on_return(sparcli::key_char('q'), ACT_QUIT, "quit");
 
         if(layout == Layout::ARCHIVE) {
             shortcuts.on_return(sparcli::key_char('r'), ACT_RESTORE, "restore")
@@ -528,6 +530,10 @@ void run_task_finder(TaskService& service, const Config& config) {
             break;   // Esc / Ctrl-C quits the app
         }
         const int action = shortcuts.fired();
+
+        if(action == ACT_QUIT) {
+            break;   // `q` quits the app
+        }
 
         if(action == ACT_TOGGLE_LIST) {
             // Switching into an empty list would open a finder with no rows and
