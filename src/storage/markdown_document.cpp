@@ -133,4 +133,24 @@ std::vector<std::filesystem::path> list_markdown_files(
     return files;
 }
 
+std::vector<std::filesystem::path> list_markdown_files_recursive(
+    const std::filesystem::path& dir
+) {
+    std::vector<std::filesystem::path> files;
+
+    std::error_code error;
+    if(!std::filesystem::is_directory(dir, error)) {
+        return files;
+    }
+
+    for(const auto& entry :
+        std::filesystem::recursive_directory_iterator(dir, error)) {
+        if(entry.is_regular_file() && entry.path().extension() == ".md") {
+            files.push_back(entry.path());
+        }
+    }
+    std::ranges::sort(files);
+    return files;
+}
+
 }  // namespace mdtask

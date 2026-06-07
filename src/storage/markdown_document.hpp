@@ -62,4 +62,14 @@ void write_markdown(
     const std::filesystem::path& dir
 );
 
+/**
+ * Lists the `*.md` files anywhere under `dir` (recursive).
+ *
+ * @param dir Directory tree to scan; a missing directory yields an empty list.
+ * @return Matching file paths sorted by path.
+ */
+[[nodiscard]] std::vector<std::filesystem::path> list_markdown_files_recursive(
+    const std::filesystem::path& dir
+);
+
 }  // namespace mdtask

@@ -8,6 +8,10 @@ std::vector<Task> InMemoryTaskRepository::find_all() const {
     return tasks_;
 }
 
+std::vector<Task> InMemoryTaskRepository::find_archived() const {
+    return archived_;
+}
+
 std::optional<Task> InMemoryTaskRepository::find_by_id(
     const std::string& id
 ) const {
@@ -30,8 +34,12 @@ void InMemoryTaskRepository::update(const Task& task) {
 }
 
 void InMemoryTaskRepository::archive(const Task& task) {
-    // Archiving simply removes the task from the active in-memory set; there
-    // is no separate store to keep it in for this fake.
+    // Move the task from the active set into the archive set, mirroring the
+    // file-backed repository so the fake stays a valid implementation.
+    if(const auto found = std::ranges::find(tasks_, task.id, &Task::id);
+       found != tasks_.end()) {
+        archived_.push_back(*found);
+    }
     const auto removed = std::ranges::remove(tasks_, task.id, &Task::id);
     tasks_.erase(removed.begin(), removed.end());
 }

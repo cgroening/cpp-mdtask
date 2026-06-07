@@ -63,6 +63,9 @@ public:
     /** Returns all tasks (active set). */
     [[nodiscard]] std::vector<Task> all_tasks() const;
 
+    /** Returns the archived tasks (moved out of the active set). */
+    [[nodiscard]] std::vector<Task> archived_tasks() const;
+
     /** Returns the tasks that are not completed yet. */
     [[nodiscard]] std::vector<Task> open_tasks() const;
 

@@ -110,6 +110,12 @@ void run_markdown_task_repository_tests() {
         CHECK(any_file_named(
             archive_dir / "2026" / "06", "2026-06-10--pay-the-invoice.md"
         ));
+
+        // find_archived reads the nested archive tree back.
+        const auto archived = repository.find_archived();
+        CHECK(archived.size() == 1);
+        CHECK(archived[0].id == "id000000");
+        CHECK(archived[0].title == "Pay the invoice");
     }
 
     fs::remove_all(dir, ec);

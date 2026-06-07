@@ -145,15 +145,18 @@ void run_service_tests() {
         CHECK(changed->priority == Priority::MEDIUM);
     }
 
-    // archive_task removes the task from the active set.
+    // archive_task moves the task from the active set into the archive.
     {
         InMemoryTaskRepository repository;
         TaskService service(repository);
 
         const auto created = service.add_task({.title = "Archive me"});
         CHECK(created.has_value());
+        CHECK(service.archived_tasks().empty());
         CHECK(service.archive_task(created->id).has_value());
         CHECK(service.all_tasks().empty());
+        CHECK(service.archived_tasks().size() == 1);
+        CHECK(service.archived_tasks()[0].id == created->id);
     }
 
     // open_tasks returns only tasks that are not done yet.

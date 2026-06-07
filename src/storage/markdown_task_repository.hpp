@@ -32,6 +32,7 @@ public:
     );
 
     [[nodiscard]] std::vector<Task> find_all() const override;
+    [[nodiscard]] std::vector<Task> find_archived() const override;
     [[nodiscard]] std::optional<Task> find_by_id(
         const std::string& id
     ) const override;
@@ -40,6 +41,11 @@ public:
     void archive(const Task& task) override;
 
 private:
+    /** Reads and parses the tasks at `paths`, skipping unreadable files. */
+    [[nodiscard]] static std::vector<Task> load_tasks(
+        const std::vector<std::filesystem::path>& paths
+    );
+
     std::filesystem::path tasks_dir_;
     std::filesystem::path archive_dir_;
 };

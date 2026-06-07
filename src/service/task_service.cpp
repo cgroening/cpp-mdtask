@@ -89,6 +89,10 @@ std::vector<Task> TaskService::all_tasks() const {
     return repository_.find_all();
 }
 
+std::vector<Task> TaskService::archived_tasks() const {
+    return repository_.find_archived();
+}
+
 std::vector<Task> TaskService::open_tasks() const {
     auto tasks = repository_.find_all();
     const auto removed = std::ranges::remove_if(tasks, &Task::done);

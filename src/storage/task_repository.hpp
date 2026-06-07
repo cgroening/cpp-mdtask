@@ -28,6 +28,13 @@ public:
     [[nodiscard]] virtual std::vector<Task> find_all() const = 0;
 
     /**
+     * Returns all archived tasks (those moved out of the active set).
+     *
+     * @return Archived tasks; empty vector when none have been archived.
+     */
+    [[nodiscard]] virtual std::vector<Task> find_archived() const = 0;
+
+    /**
      * Looks up a single task.
      *
      * @param id Id of the task to find.

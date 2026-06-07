@@ -245,9 +245,11 @@ MarkdownTaskRepository::MarkdownTaskRepository(
     : tasks_dir_(std::move(tasks_dir)),
       archive_dir_(std::move(archive_dir)) {}
 
-std::vector<Task> MarkdownTaskRepository::find_all() const {
+std::vector<Task> MarkdownTaskRepository::load_tasks(
+    const std::vector<fs::path>& paths
+) {
     std::vector<Task> tasks;
-    for(const auto& path : list_markdown_files(tasks_dir_)) {
+    for(const auto& path : paths) {
         try {
             if(const auto document = read_markdown(path)) {
                 tasks.push_back(document_to_task(*document, path));
@@ -263,6 +265,16 @@ std::vector<Task> MarkdownTaskRepository::find_all() const {
         }
     }
     return tasks;
+}
+
+std::vector<Task> MarkdownTaskRepository::find_all() const {
+    // Non-recursive: archived files live under archive_dir_ and stay excluded.
+    return load_tasks(list_markdown_files(tasks_dir_));
+}
+
+std::vector<Task> MarkdownTaskRepository::find_archived() const {
+    // Archived files are nested under archive/<year>/<month>/, so scan deeply.
+    return load_tasks(list_markdown_files_recursive(archive_dir_));
 }
 
 std::optional<Task> MarkdownTaskRepository::find_by_id(
