@@ -165,6 +165,7 @@ sparcli::FuzzyOpts make_opts(const char* const* headers) {
     opts.stretch_columns = std::uint64_t{1} << COL_TASK;
     opts.order = SC_FUZZY_ORDER_INSERTION;
     opts.section_counts = true;
+    opts.modal = true;                 // vim-style normal/insert modes
     opts.fullscreen = true;            // fill the alternate screen
     opts.valign = SC_VALIGN_TOP;
     opts.hide_summary = true;
