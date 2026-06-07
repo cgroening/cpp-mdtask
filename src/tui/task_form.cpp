@@ -173,6 +173,7 @@ std::optional<FormResult> run_task_form(
         .fullscreen = true,            // share the finder's alternate screen
         .valign = SC_VALIGN_TOP,
         .header = header.get(),
+        .modified_marker = "[*] ",     // flag changed fields in their box title
     });
 
     form.row_begin();
@@ -212,7 +213,14 @@ std::optional<FormResult> run_task_form(
     );
 
     if(!form.run()) {
-        return std::nullopt;
+        // Esc: discard a pristine form silently; otherwise ask (default save).
+        if(!form.modified()) {
+            return std::nullopt;
+        }
+        if(!sparcli::confirm("Save changes?", {.default_yes = true})
+                .value_or(false)) {
+            return std::nullopt;
+        }
     }
 
     FormResult result;
