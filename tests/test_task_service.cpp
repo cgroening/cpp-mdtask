@@ -110,7 +110,8 @@ void run_service_tests() {
         CHECK(shifted->due == ymd(2026, 6, 7));
     }
 
-    // shift_due puts a dateless task onto the calendar and clears someday.
+    // shift_due puts a dateless task onto today (first press) and clears
+    // someday, regardless of the shift direction.
     {
         InMemoryTaskRepository repository;
         TaskService service(repository);
@@ -121,8 +122,13 @@ void run_service_tests() {
 
         const auto shifted = service.shift_due(created->id, 1);
         CHECK(shifted.has_value());
-        CHECK(shifted->due == shift_days(today(), 1));
+        CHECK(shifted->due == today());
         CHECK(!shifted->someday);
+
+        // A dated task then shifts normally by the given number of days.
+        const auto again = service.shift_due(created->id, 1);
+        CHECK(again.has_value());
+        CHECK(again->due == shift_days(today(), 1));
     }
 
     // set_priority updates only the priority.

@@ -121,8 +121,9 @@ Result<Task> TaskService::shift_due(const std::string& id, int days) {
         return std::unexpected(task_not_found_error(id));
     }
 
-    const auto base = task->due.value_or(today());
-    task->due = shift_days(base, days);
+    // A dateless task lands on today on the first +/- press; once it has a
+    // date, further presses shift it by the given number of days.
+    task->due = task->due ? shift_days(*task->due, days) : today();
     // Moving an Inbox task onto the calendar drops its someday flag.
     task->someday = false;
     repository_.update(*task);

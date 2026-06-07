@@ -129,6 +129,9 @@ sparcli::FuzzyOpts make_opts(const char* const* headers) {
         .padding = {.right = 1, .left = 1},
         .width_mode = SC_WIDTH_FULL,
     };
+    // The table's own grid lines (frame + separators) in a light gray.
+    opts.table_opts.border.outer_color = sparcli::rgb(180, 180, 180);
+    opts.table_opts.border.inner_color = sparcli::rgb(180, 180, 180);
     return opts;
 }
 
