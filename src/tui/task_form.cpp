@@ -143,13 +143,10 @@ std::optional<FormResult> run_task_form(
     );
     head.append("  ", sparcli::style(SC_TEXT_ATTR_DIM));
     if(existing) {
+        // A fixed label, not the title (a long title would wrap the header).
         head.append(
-            "editing: ",
+            is_note ? "editing note" : "editing task",
             sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::yellow())
-        );
-        head.append(
-            existing->title,
-            sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::purple())
         );
         // Read-only note: when this task was completed.
         if(const std::string completed = presentation::format_completed(
@@ -177,13 +174,19 @@ std::optional<FormResult> run_task_form(
         .autoedit = existing == nullptr,
         .editor = editor.c_str(),
         .fullscreen = true,            // share the finder's alternate screen
-        .valign = SC_VALIGN_TOP,
+        // Two layout variants to compare:
+        //  (A) SC_VALIGN_TOP + Description `.fill_height = true` -> the form
+        //      sits at the top and the description grows to fill the screen.
+        //  (B) SC_VALIGN_MIDDLE + fixed-height description (current) -> the
+        //      header stays on top and the form is vertically centered.
+        // (A) is commented out below; flip both spots to switch back.
+        .valign = SC_VALIGN_MIDDLE,
         .header = header.get(),
         .modified_marker = "[*] ",     // flag changed fields in their box title
     });
 
-    // A note's grid is single-column; a task's title/description span 3.
-    const int wide_span = is_note ? 1 : 3;
+    // A note's grid is single-column; a task's title/description span all five.
+    const int wide_span = is_note ? 1 : 5;
 
     form.row_begin();
     const int title_id = form.add_text(
@@ -201,35 +204,44 @@ std::optional<FormResult> run_task_form(
         priority_id = form.add_select(
             "Priority", PRIORITY_CHOICES,
             existing ? priority_to_index(existing->priority) : 0,
-            {.width_mode = SC_FWIDTH_PCT, .width = 33}
+            {.width_mode = SC_FWIDTH_PCT, .width = 20}
         );
         due_id = form.add_date(
             "Due", due_initial,
-            {.width_mode = SC_FWIDTH_PCT, .width = 34, .date_optional = true,
+            {.width_mode = SC_FWIDTH_PCT, .width = 20, .date_optional = true,
              .help = "enter picks a date, del clears it"}
         );
         someday_id = form.add_bool(
             "Someday", existing ? existing->someday : false,
-            {.width_mode = SC_FWIDTH_AUTO}
+            {.width_mode = SC_FWIDTH_PCT, .width = 20}
         );
 
-        form.row_begin();
         status_id = form.add_select(
             "Status", STATUS_CHOICES,
             existing ? status_to_index(existing->status) : 0,
-            {.width_mode = SC_FWIDTH_PCT, .width = 33}
+            {.width_mode = SC_FWIDTH_PCT, .width = 20}
         );
     }
 
-    form.row_begin();
-    const int note_id = form.add_bool(
-        "Note", is_note, {.width_mode = SC_FWIDTH_AUTO}
-    );
+    // In the note layout the checkbox gets its own full-width row; on the task
+    // row it is the fifth column (PCT to line up with the other four).
+    sparcli::FieldOpts note_opts{};
+    if(is_note) {
+        form.row_begin();
+        note_opts.width_mode = SC_FWIDTH_AUTO;
+    } else {
+        note_opts.width_mode = SC_FWIDTH_PCT;
+        note_opts.width = 20;
+    }
+    const int note_id = form.add_bool("Note", is_note, note_opts);
 
     form.row_begin();
     const int description_id = form.add_text(
         "Description", existing ? existing->description : "",
         {.width_mode = SC_FWIDTH_AUTO, .col_span = wide_span, .height = 6,
+         // Commented out to try the centered layout instead of the fill layout
+         // (see the .valign note above); re-enable together with SC_VALIGN_TOP.
+         // .fill_height = true,
          .multiline = true, .help = "ctrl-g opens the editor"}
     );
 
