@@ -26,6 +26,15 @@ namespace mdtask::presentation {
     DateFormat format
 );
 
+/**
+ * Color/attributes for a section header: a full-width bar (background) plus
+ * light text per category - red overdue, purple inbox, green today, cyan
+ * tomorrow, blue later days, gray for the dateless buckets.
+ */
+[[nodiscard]] sparcli::TextStyle section_style(
+    const AgendaSection& section, std::chrono::year_month_day today
+);
+
 /** Single-glyph priority marker ("●" for set priorities, blank for NONE). */
 [[nodiscard]] std::string priority_symbol(Priority priority);
 

@@ -51,6 +51,35 @@ std::string section_header(
     return date;
 }
 
+sparcli::TextStyle section_style(
+    const AgendaSection& section, std::chrono::year_month_day today
+) {
+    namespace pal = sparcli::palette;
+    const auto bar = [](sparcli::Color fg, sparcli::Color bg) {
+        return sparcli::style(SC_TEXT_ATTR_BOLD, fg, bg);
+    };
+
+    switch(section.kind) {
+        case SectionKind::OVERDUE:
+            return bar(pal::red(), pal::red_dark());
+        case SectionKind::INBOX:
+            return bar(pal::purple(), pal::purple_dark());
+        case SectionKind::WITHOUT_DATE:
+            return bar(pal::fg_darken_2(), pal::bg_lighten_3());
+        case SectionKind::DATED:
+            break;
+    }
+
+    const auto day = section.day.value_or(today);
+    if(day == today) {
+        return bar(pal::green(), pal::green_dark());
+    }
+    if(day == shift_days(today, 1)) {
+        return bar(pal::cyan(), pal::cyan_dark());
+    }
+    return bar(pal::blue(), pal::blue_dark());
+}
+
 std::string priority_symbol(Priority priority) {
     return priority == Priority::NONE ? NO_PRIORITY_MARKER : PRIORITY_MARKER;
 }

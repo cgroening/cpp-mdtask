@@ -53,7 +53,10 @@ RowIndex populate(
     const sparcli::TextStyle due_style = sparcli::style(SC_TEXT_ATTR_DIM);
 
     for(const auto& section : agenda) {
-        finder.add_section(presentation::section_header(section, today, format));
+        finder.add_section_styled(
+            presentation::section_header(section, today, format),
+            presentation::section_style(section, today)
+        );
         rows.by_index.emplace_back(std::nullopt);
         ++index;
 
@@ -121,8 +124,8 @@ sparcli::FuzzyOpts make_opts(const char* const* headers) {
     // Accent and the selected-row highlight come from the global input theme
     // (purple / dark-purple bar); only the section header keeps a custom style.
     opts.empty_text = "No tasks - press n to add one";
-    opts.section_style =
-        sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::white(), sparcli::rgb(58, 64, 92));
+    // Section headers are styled per category in populate() via
+    // presentation::section_style, so no global section_style is set here.
     opts.box = sparcli::BoxStyle{
         .enabled = true,
         .border = {.type = SC_BORDER_ROUNDED, .color = sparcli::palette::purple()},
