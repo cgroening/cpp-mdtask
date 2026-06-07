@@ -124,7 +124,9 @@ sparcli::TextStyle status_style(const Task& task, bool overdue) {
 
 sparcli::TextStyle title_style(const Task& task) {
     if(task.done) {
-        return sparcli::style(SC_TEXT_ATTR_DIM);
+        return sparcli::style(
+            static_cast<ScTextAttribute>(SC_TEXT_ATTR_DIM | SC_TEXT_ATTR_STRIKE)
+        );
     }
     return sparcli::TextStyle{};
 }
