@@ -42,6 +42,7 @@ struct App {
 };
 
 /* Forward declarations (defined in call order below main()) */
+void setup_theme();
 App make_app(Config config);
 sparcli::Args build_parser(
     const std::vector<std::unique_ptr<Command>>& commands
@@ -53,6 +54,10 @@ void setup_logging(const Config& config, bool verbose);
 
 int main(int argc, char** argv) {
     try {
+        // 0. Theme: a purple accent across markup, the CLI and every widget.
+        //    Set once up front, before anything renders.
+        setup_theme();
+
         // 1. Load the configuration (file is optional; defaults otherwise)
         auto config = mdtask::load_config();
         if(!config) {
@@ -95,6 +100,25 @@ int main(int argc, char** argv) {
 
 
 namespace {
+
+/**
+ * Sets the process-wide accent to purple and the input theme.
+ *
+ * Overriding the palette name "accent" recolors markup, the CLI and every
+ * widget default that resolves it (including the fuzzy finder's accent and
+ * match highlight). The input theme paints the cursor row of the fuzzy/select
+ * widgets with a full-width bar in a dark purple. Call once before rendering.
+ */
+void setup_theme() {
+    sparcli::palette::set("accent", sparcli::palette::purple());
+    sparcli::set_theme(sparcli::InputTheme{
+        .accent = sparcli::palette::purple(),
+        .selected_style = {
+            .attr = SC_TEXT_ATTR_BOLD,
+            .bg   = sparcli::rgb(57, 32, 82),
+        },
+    });
+}
 
 /**
  * Composition root: constructs the concrete types and wires the layers.

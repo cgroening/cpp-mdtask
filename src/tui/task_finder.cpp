@@ -93,7 +93,7 @@ sparcli::Rendered build_header(std::size_t task_count) {
     sparcli::Text title;
     title.append(
         "mdtask",
-        sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::accent())
+        sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::purple())
     );
     title.append("  ", sparcli::style(SC_TEXT_ATTR_DIM));
     title.append(
@@ -118,15 +118,14 @@ sparcli::FuzzyOpts make_opts(const char* const* headers) {
     opts.fullscreen = true;            // fill the alternate screen
     opts.valign = SC_VALIGN_TOP;
     opts.hide_summary = true;
-    opts.accent = sparcli::palette::accent();
+    // Accent and the selected-row highlight come from the global input theme
+    // (purple / dark-purple bar); only the section header keeps a custom style.
     opts.empty_text = "No tasks - press n to add one";
-    opts.selected_style =
-        sparcli::style(SC_TEXT_ATTR_NONE, sparcli::black());
     opts.section_style =
         sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::white(), sparcli::rgb(58, 64, 92));
     opts.box = sparcli::BoxStyle{
         .enabled = true,
-        .border = {.type = SC_BORDER_ROUNDED, .color = sparcli::palette::accent()},
+        .border = {.type = SC_BORDER_ROUNDED, .color = sparcli::palette::purple()},
         .padding = {.right = 1, .left = 1},
         .width_mode = SC_WIDTH_FULL,
     };

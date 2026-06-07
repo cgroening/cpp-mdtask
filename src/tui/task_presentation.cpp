@@ -96,7 +96,7 @@ sparcli::TextStyle title_style(const Task& task) {
 sparcli::Rendered app_header(const sparcli::Text& content) {
     sparcli::PanelOpts opts{};
     opts.border = {
-        .type = SC_BORDER_ROUNDED, .color = sparcli::palette::accent()
+        .type = SC_BORDER_ROUNDED, .color = sparcli::palette::purple()
     };
     opts.full_width = true;
     opts.padding = {.right = 1, .left = 1};

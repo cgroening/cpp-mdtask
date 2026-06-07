@@ -100,7 +100,7 @@ std::optional<FormResult> run_task_form(
     // run(), so it must outlive the form.
     sparcli::Text head;
     head.append(
-        "mdtask", sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::accent())
+        "mdtask", sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::purple())
     );
     head.append("  ", sparcli::style(SC_TEXT_ATTR_DIM));
     if(existing) {
@@ -110,7 +110,7 @@ std::optional<FormResult> run_task_form(
         );
         head.append(
             existing->title,
-            sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::accent())
+            sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::purple())
         );
     } else {
         head.append(
@@ -123,6 +123,10 @@ std::optional<FormResult> run_task_form(
     sparcli::Form form({
         // Magenta highlights the active cell and the inline editor panel.
         .accent = sparcli::palette::magenta(),
+        .hide_summary = true,          // no "Form saved" line after submit
+        // For a new task, open the title editor right away; when editing an
+        // existing task, start in navigation mode.
+        .autoedit = existing == nullptr,
         .editor = editor.c_str(),
         .fullscreen = true,            // share the finder's alternate screen
         .valign = SC_VALIGN_TOP,
