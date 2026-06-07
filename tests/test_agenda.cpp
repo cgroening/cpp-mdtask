@@ -123,4 +123,35 @@ void run_agenda_tests() {
         CHECK(agenda[2].kind == SectionKind::NEXT_MONTH);
         CHECK(agenda[3].kind == SectionKind::LATER);
     }
+
+    // group_archive buckets by completion: months for the last 12, then years,
+    // then a trailing group for tasks without a completion date. With today on
+    // 2026-06-06 the month window reaches back to 2025-07.
+    {
+        auto with_completed = [](std::string title, const char* completed_at) {
+            Task task = make(std::move(title), std::nullopt,
+                             Priority::NONE, true);
+            if(completed_at) {
+                task.completed_at = completed_at;
+            }
+            return task;
+        };
+
+        const std::vector<Task> archived = {
+            with_completed("recent",   "2026-06-01T10:00:00"),
+            with_completed("spring",   "2026-03-15T09:00:00"),
+            with_completed("old",      "2024-11-20T08:00:00"),
+            with_completed("nodate",   nullptr),
+        };
+
+        const auto groups = group_archive(archived, today);
+        CHECK(groups.size() == 4);
+        CHECK(groups[0].header == "June 2026");
+        CHECK(groups[0].tasks.size() == 1);
+        CHECK(groups[0].tasks[0].title == "recent");
+        CHECK(groups[1].header == "March 2026");
+        CHECK(groups[2].header == "2024");
+        CHECK(groups[3].header == "No completion date");
+        CHECK(groups[3].tasks[0].title == "nodate");
+    }
 }

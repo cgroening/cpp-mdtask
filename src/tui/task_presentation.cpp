@@ -28,6 +28,19 @@ std::string format_date(
     );
 }
 
+std::string format_completed(
+    const std::optional<std::string>& completed_at, DateFormat format
+) {
+    if(!completed_at || completed_at->size() < 10) {
+        return {};
+    }
+    const auto date = parse_iso_date(completed_at->substr(0, 10));
+    if(!date) {
+        return {};
+    }
+    return format_date(*date, format);
+}
+
 std::string section_header(
     const AgendaSection& section,
     std::chrono::year_month_day today,

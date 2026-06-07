@@ -7,6 +7,7 @@
 #include <sparcli.hpp>
 
 #include <chrono>
+#include <optional>
 #include <string>
 
 namespace mdtask::presentation {
@@ -14,6 +15,16 @@ namespace mdtask::presentation {
 /** Formats a date in the configured display format (file names stay ISO). */
 [[nodiscard]] std::string format_date(
     std::chrono::year_month_day date, DateFormat format
+);
+
+/**
+ * Formats the date a task was completed from its ISO `completed_at` timestamp.
+ *
+ * @return The formatted completion date, or "" when `completed_at` is empty or
+ *         not a parseable ISO date.
+ */
+[[nodiscard]] std::string format_completed(
+    const std::optional<std::string>& completed_at, DateFormat format
 );
 
 /**

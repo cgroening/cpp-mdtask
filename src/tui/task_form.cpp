@@ -112,6 +112,15 @@ std::optional<FormResult> run_task_form(
             existing->title,
             sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::purple())
         );
+        // Read-only note: when this task was completed.
+        if(const std::string completed = presentation::format_completed(
+               existing->completed_at, config.date_format
+           ); !completed.empty()) {
+            head.append(
+                "  \xc2\xb7  completed " + completed,
+                sparcli::style(SC_TEXT_ATTR_NONE, sparcli::palette::green())
+            );
+        }
     } else {
         head.append(
             "new task",

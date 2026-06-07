@@ -1,7 +1,12 @@
 #include "domain/agenda.hpp"
 
+#include "util/date.hpp"
+
 #include <algorithm>
+#include <functional>
 #include <map>
+#include <optional>
+#include <string>
 #include <tuple>
 #include <utility>
 
@@ -29,6 +34,31 @@ auto order_key(const Task& task) {
 void sort_section(std::vector<Task>& tasks) {
     std::ranges::sort(tasks, {}, [](const Task& task) {
         return order_key(task);
+    });
+}
+
+constexpr const char* MONTH_NAMES[] = {
+    "January", "February", "March",     "April",   "May",      "June",
+    "July",    "August",   "September", "October", "November", "December",
+};
+
+/** Calendar day a task was completed, parsed from `completed_at` (or nullopt). */
+std::optional<std::chrono::year_month_day> completion_day(const Task& task) {
+    if(!task.completed_at || task.completed_at->size() < 10) {
+        return std::nullopt;
+    }
+    return parse_iso_date(task.completed_at->substr(0, 10));
+}
+
+/** Orders archived tasks newest-completed first, then by title. */
+void sort_archive_group(std::vector<Task>& tasks) {
+    std::ranges::sort(tasks, [](const Task& a, const Task& b) {
+        const auto da = completion_day(a);
+        const auto db = completion_day(b);
+        if(da != db) {
+            return da > db;   // most recent completion first
+        }
+        return a.title < b.title;
     });
 }
 
@@ -108,6 +138,55 @@ std::vector<AgendaSection> build_agenda(
     add(SectionKind::WITHOUT_DATE, without_date);
 
     return sections;
+}
+
+std::vector<ArchiveGroup> group_archive(
+    const std::vector<Task>& archived, std::chrono::year_month_day today
+) {
+    using std::chrono::year_month;
+    const year_month this_month{today.year(), today.month()};
+    const year_month oldest_month = this_month - std::chrono::months{11};
+
+    // Descending maps: most recent month/year first.
+    std::map<year_month, std::vector<Task>, std::greater<>> months;
+    std::map<int, std::vector<Task>, std::greater<>> years;
+    std::vector<Task> no_date;
+
+    for(const auto& task : archived) {
+        const auto day = completion_day(task);
+        if(!day) {
+            no_date.push_back(task);
+            continue;
+        }
+        const year_month completed{day->year(), day->month()};
+        if(completed >= oldest_month) {
+            months[completed].push_back(task);
+        } else {
+            years[static_cast<int>(day->year())].push_back(task);
+        }
+    }
+
+    std::vector<ArchiveGroup> groups;
+    for(auto& [month, tasks] : months) {
+        sort_archive_group(tasks);
+        const unsigned index = static_cast<unsigned>(month.month()) - 1;
+        groups.push_back({
+            .header = std::string(MONTH_NAMES[index]) + " "
+                + std::to_string(static_cast<int>(month.year())),
+            .tasks  = std::move(tasks),
+        });
+    }
+    for(auto& [year, tasks] : years) {
+        sort_archive_group(tasks);
+        groups.push_back({.header = std::to_string(year),
+                          .tasks = std::move(tasks)});
+    }
+    if(!no_date.empty()) {
+        sort_archive_group(no_date);
+        groups.push_back({.header = "No completion date",
+                          .tasks = std::move(no_date)});
+    }
+    return groups;
 }
 
 }  // namespace mdtask

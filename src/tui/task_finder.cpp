@@ -52,22 +52,37 @@ void add_task_row(
     RowIndex& rows,
     std::size_t& index
 ) {
-    const sparcli::TextStyle due_style = sparcli::style(SC_TEXT_ATTR_DIM);
     const bool overdue = task.due && *task.due < today && !task.done;
-    const std::string due_text =
-        task.due ? presentation::format_date(*task.due, format) : "";
+
+    // The Due/Done column shows the completion date (green) for a done task,
+    // otherwise the due date (dim).
+    const std::string completed = presentation::format_completed(
+        task.completed_at, format
+    );
+    std::string due_done_text;
+    sparcli::TextStyle due_done_style;
+    if(task.done && !completed.empty()) {
+        due_done_text = completed;
+        due_done_style = sparcli::style(
+            SC_TEXT_ATTR_NONE, sparcli::palette::green()
+        );
+    } else {
+        due_done_text =
+            task.due ? presentation::format_date(*task.due, format) : "";
+        due_done_style = sparcli::style(SC_TEXT_ATTR_DIM);
+    }
 
     finder.add_row_styled(
         {
             presentation::priority_symbol(task.priority),
             task.title,
-            due_text,
+            due_done_text,
             presentation::status_text(task, overdue),
         },
         {
             presentation::priority_style(task.priority),
             presentation::title_style(task),
-            due_style,
+            due_done_style,
             presentation::status_style(task, overdue),
         }
     );
@@ -104,7 +119,7 @@ RowIndex populate(
     return rows;
 }
 
-/** Fills the finder with a flat, read-only list of archived tasks. */
+/** Fills the finder with archived tasks grouped by completion month/year. */
 RowIndex populate_archive(
     sparcli::Fuzzy& finder,
     const std::vector<Task>& archived,
@@ -113,20 +128,20 @@ RowIndex populate_archive(
 ) {
     RowIndex rows;
     std::size_t index = 0;
-
-    finder.add_section_styled(
-        "Archive",
-        sparcli::style(
-            SC_TEXT_ATTR_BOLD,
-            sparcli::palette::fg_darken_2(),
-            sparcli::palette::bg_lighten_3()
-        )
+    const sparcli::TextStyle header_style = sparcli::style(
+        SC_TEXT_ATTR_BOLD,
+        sparcli::palette::fg_darken_2(),
+        sparcli::palette::bg_lighten_3()
     );
-    rows.by_index.emplace_back(std::nullopt);
-    ++index;
 
-    for(const auto& task : archived) {
-        add_task_row(finder, task, today, format, rows, index);
+    for(const auto& group : group_archive(archived, today)) {
+        finder.add_section_styled(group.header, header_style);
+        rows.by_index.emplace_back(std::nullopt);
+        ++index;
+
+        for(const auto& task : group.tasks) {
+            add_task_row(finder, task, today, format, rows, index);
+        }
     }
     return rows;
 }
@@ -212,7 +227,8 @@ void run_task_finder(TaskService& service, const Config& config) {
         return;
     }
 
-    static const char* const HEADERS[N_COLS] = {"!", "Task", "Due", "Status"};
+    static const char* const HEADERS[N_COLS] =
+        {"!", "Task", "Due/Done", "Status"};
 
     std::uint64_t focus = 0;    // task id to keep the cursor on after a rebuild
     bool show_archive = false;  // toggles the agenda vs the read-only archive

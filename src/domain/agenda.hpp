@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace mdtask {
@@ -47,6 +48,29 @@ struct AgendaSection {
  */
 [[nodiscard]] std::vector<AgendaSection> build_agenda(
     const std::vector<Task>& tasks, std::chrono::year_month_day today
+);
+
+/** One labelled group of archived tasks (a month, a year, or the no-date set). */
+struct ArchiveGroup {
+    std::string header;          /**< Display label, e.g. "June 2026" or "2024". */
+    std::vector<Task> tasks;     /**< Tasks in the group. */
+};
+
+/**
+ * Groups archived tasks by completion time for the archive view.
+ *
+ * Tasks completed within the last 12 months get one group per month (newest
+ * first, header "<Month> <year>"); older ones are grouped by year (descending,
+ * header "<year>"); tasks without a parseable `completed_at` go into a trailing
+ * "No completion date" group. Within a group tasks are ordered by completion day
+ * descending, then by title.
+ *
+ * @param archived Archived tasks (not mutated).
+ * @param today    Reference day for the 12-month window.
+ * @return Ordered, non-empty groups; empty when `archived` is empty.
+ */
+[[nodiscard]] std::vector<ArchiveGroup> group_archive(
+    const std::vector<Task>& archived, std::chrono::year_month_day today
 );
 
 }  // namespace mdtask
