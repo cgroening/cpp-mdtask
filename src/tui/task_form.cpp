@@ -177,10 +177,12 @@ std::optional<FormResult> run_task_form(
         // Two layout variants to compare:
         //  (A) SC_VALIGN_TOP + Description `.fill_height = true` -> the form
         //      sits at the top and the description grows to fill the screen.
-        //  (B) SC_VALIGN_MIDDLE + fixed-height description (current) -> the
-        //      header stays on top and the form is vertically centered.
-        // (A) is commented out below; flip both spots to switch back.
+        //  (B) SC_VALIGN_MIDDLE + content scope (current) -> the header stays
+        //      pinned at the very top, the hint/edit footer at the very bottom,
+        //      and the fields are centered in the gap between them.
+        // (A) is commented out (here and at .fill_height below); flip to switch.
         .valign = SC_VALIGN_MIDDLE,
+        .valign_scope = SC_VALIGN_SCOPE_CONTENT,
         .header = header.get(),
         .modified_marker = "[*] ",     // flag changed fields in their box title
     });
