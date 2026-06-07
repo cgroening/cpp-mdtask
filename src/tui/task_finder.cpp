@@ -339,24 +339,23 @@ std::uint64_t run_section_jump(const std::vector<JumpTarget>& targets) {
 }
 
 /** Builds the pinned tab bar "Tasks | Notes | Archive" (active tab 0/1/2). */
-sparcli::Rendered build_tabbar(int active, std::size_t count) {
+sparcli::Rendered build_tabbar(int active) {
     const char* const names[] = {"Tasks", "Notes", "Archive"};
+    const sparcli::TextStyle app_title = sparcli::style(
+        SC_TEXT_ATTR_BOLD, sparcli::palette::purple()
+    );
     const sparcli::TextStyle on =
-        sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::purple());
+        sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::green());
     const sparcli::TextStyle off = sparcli::style(SC_TEXT_ATTR_DIM);
 
     sparcli::Text bar;
-    bar.append("mdtask  ", on);
+    bar.append("mdtask    ", app_title);
     for(int i = 0; i < 3; ++i) {
         if(i > 0) {
             bar.append("  \xe2\x94\x82  ", off);   // " │ "
         }
         bar.append(names[i], i == active ? on : off);
     }
-    bar.append(
-        "   " + std::to_string(count),
-        sparcli::style(SC_TEXT_ATTR_NONE, sparcli::palette::cyan())
-    );
     return presentation::app_header(bar);
 }
 
@@ -489,7 +488,7 @@ void run_task_finder(TaskService& service, const Config& config) {
         }
 
         // The header is borrowed by run(), so it must outlive the finder.
-        const sparcli::Rendered header = build_tabbar(active_tab, items.size());
+        const sparcli::Rendered header = build_tabbar(active_tab);
 
         sparcli::FuzzyOpts opts = make_opts(column_spec(layout));
         opts.header = header.get();
