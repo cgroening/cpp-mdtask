@@ -48,6 +48,8 @@ void print_table(const std::vector<Task>& tasks) {
                     return sparcli::cell_markup("[dim]cancelled[/]");
                 case Status::IN_PROGRESS:
                     return sparcli::cell_markup("[yellow]in progress[/]");
+                case Status::PAUSED:
+                    return sparcli::cell_markup("[blue]paused[/]");
                 case Status::OPEN:
                     break;
             }
@@ -74,6 +76,7 @@ void print_plain(const std::vector<Task>& tasks) {
         const char* status = task.status == Status::DONE        ? "done"
                            : task.status == Status::CANCELLED   ? "cancelled"
                            : task.status == Status::IN_PROGRESS ? "in_progress"
+                           : task.status == Status::PAUSED      ? "paused"
                                                                 : "open";
         std::println(
             "{}\t{}\t{}\t{}\t{}",

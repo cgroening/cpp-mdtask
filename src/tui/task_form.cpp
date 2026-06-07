@@ -44,6 +44,7 @@ std::size_t priority_to_index(Priority priority) {
 const std::vector<std::string> STATUS_CHOICES = {
     presentation::status_choice(Status::OPEN),
     presentation::status_choice(Status::IN_PROGRESS),
+    presentation::status_choice(Status::PAUSED),
     presentation::status_choice(Status::DONE),
     presentation::status_choice(Status::CANCELLED),
 };
@@ -52,8 +53,9 @@ const std::vector<std::string> STATUS_CHOICES = {
 Status status_from_index(std::size_t index) {
     switch(index) {
         case 1:  return Status::IN_PROGRESS;
-        case 2:  return Status::DONE;
-        case 3:  return Status::CANCELLED;
+        case 2:  return Status::PAUSED;
+        case 3:  return Status::DONE;
+        case 4:  return Status::CANCELLED;
         default: return Status::OPEN;
     }
 }
@@ -62,8 +64,9 @@ Status status_from_index(std::size_t index) {
 std::size_t status_to_index(Status status) {
     switch(status) {
         case Status::IN_PROGRESS: return 1;
-        case Status::DONE:        return 2;
-        case Status::CANCELLED:   return 3;
+        case Status::PAUSED:      return 2;
+        case Status::DONE:        return 3;
+        case Status::CANCELLED:   return 4;
         case Status::OPEN:        break;
     }
     return 0;

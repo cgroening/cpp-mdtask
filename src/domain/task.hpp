@@ -18,6 +18,7 @@ enum class Priority {
 enum class Status {
     OPEN,
     IN_PROGRESS,
+    PAUSED,
     DONE,
     CANCELLED,
 };

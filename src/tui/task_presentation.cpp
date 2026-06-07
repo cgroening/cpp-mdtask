@@ -123,6 +123,7 @@ std::string status_symbol(const Task& task, bool overdue) {
         case Status::DONE:        return "\xe2\x9c\x93";          // ✓
         case Status::CANCELLED:   return "\xe2\x8a\x98";          // ⊘
         case Status::IN_PROGRESS: return "\xe2\x97\x90";          // ◐
+        case Status::PAUSED:      return "\xe2\x80\x96";          // ‖
         case Status::OPEN:        break;
     }
     return overdue ? "\xe2\x9a\xa0" : "\xe2\x97\x8b";   // ⚠ : ○
@@ -140,6 +141,11 @@ sparcli::TextStyle status_style(const Task& task, bool overdue) {
                 SC_TEXT_ATTR_BOLD,
                 overdue ? sparcli::palette::red() : sparcli::palette::yellow()
             );
+        case Status::PAUSED:
+            return sparcli::style(
+                SC_TEXT_ATTR_BOLD,
+                overdue ? sparcli::palette::red() : sparcli::palette::blue()
+            );
         case Status::OPEN:
             break;
     }
@@ -152,6 +158,7 @@ sparcli::TextStyle status_style(const Task& task, bool overdue) {
 std::string status_label(Status status) {
     switch(status) {
         case Status::IN_PROGRESS: return "In progress";
+        case Status::PAUSED:      return "Paused";
         case Status::DONE:        return "Done";
         case Status::CANCELLED:   return "Cancelled";
         case Status::OPEN:        break;
@@ -163,6 +170,7 @@ std::string status_choice(Status status) {
     // Symbol + text for the form's status select (non-overdue glyphs).
     switch(status) {
         case Status::IN_PROGRESS: return "\xe2\x97\x90 In progress";  // ◐
+        case Status::PAUSED:      return "\xe2\x80\x96 Paused";       // ‖
         case Status::DONE:        return "\xe2\x9c\x93 Done";         // ✓
         case Status::CANCELLED:   return "\xe2\x8a\x98 Cancelled";    // ⊘
         case Status::OPEN:        break;

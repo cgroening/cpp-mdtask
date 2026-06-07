@@ -258,6 +258,21 @@ void run_service_tests() {
         CHECK(service.open_tasks().empty());
     }
 
+    // Pausing is active: no completion timestamp, still in the open set.
+    {
+        InMemoryTaskRepository repository;
+        TaskService service(repository);
+
+        const auto created = service.add_task({.title = "Hold me"});
+        CHECK(created.has_value());
+
+        const auto paused = service.set_status(created->id, Status::PAUSED);
+        CHECK(paused.has_value());
+        CHECK(paused->status == Status::PAUSED);
+        CHECK(!paused->completed_at.has_value());
+        CHECK(service.open_tasks().size() == 1);
+    }
+
     // delete_task removes active and archived tasks; unknown ids error.
     {
         InMemoryTaskRepository repository;

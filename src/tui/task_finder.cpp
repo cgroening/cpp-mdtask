@@ -37,7 +37,6 @@ enum {
     ACT_MOVE_DOWN      = 11,
     ACT_MOVE_TOP       = 12,
     ACT_MOVE_BOTTOM    = 13,
-    ACT_CANCEL         = 14,
     ACT_DELETE         = 15,
 };
 
@@ -51,13 +50,15 @@ sparcli::KeyChord alt_key(ScKeyType key, bool shift) {
     };
 }
 
-/** Next status when cycling: open -> in progress -> done -> open. */
+/** Status cycle (key `p`): open -> in progress -> paused -> cancelled -> open.
+    Done is set with `d`, not via this cycle; cycling a done task reopens it. */
 Status next_status(Status status) {
     switch(status) {
         case Status::OPEN:        return Status::IN_PROGRESS;
-        case Status::IN_PROGRESS: return Status::DONE;
+        case Status::IN_PROGRESS: return Status::PAUSED;
+        case Status::PAUSED:      return Status::CANCELLED;
+        case Status::CANCELLED:   break;
         case Status::DONE:        break;
-        case Status::CANCELLED:   break;   // cycling reopens a cancelled task
     }
     return Status::OPEN;
 }
@@ -349,8 +350,7 @@ void run_task_finder(TaskService& service, const Config& config) {
         } else {
             shortcuts.on_return(sparcli::key_char('d'), ACT_TOGGLE_DONE, "done")
                      .on_return(sparcli::key_char('p'), ACT_CYCLE_STATUS,
-                                "progress")
-                     .on_return(sparcli::key_char('c'), ACT_CANCEL, "cancel")
+                                "status")
                      .on_return(sparcli::key_special(SC_KEY_DELETE), ACT_DELETE,
                                 "delete")
                      .on_return(sparcli::key_special(SC_KEY_BACKSPACE),
@@ -485,13 +485,6 @@ void run_task_finder(TaskService& service, const Config& config) {
             case ACT_TOGGLE_DONE: report(service.toggle_done(task.id)); break;
             case ACT_CYCLE_STATUS:
                 report(service.set_status(task.id, next_status(task.status)));
-                break;
-            case ACT_CANCEL:
-                report(service.set_status(
-                    task.id,
-                    task.status == Status::CANCELLED ? Status::OPEN
-                                                     : Status::CANCELLED
-                ));
                 break;
             case ACT_MOVE_UP:
                 report(service.move_task(task.id, MoveDir::UP));     break;

@@ -197,4 +197,22 @@ void run_agenda_tests() {
         CHECK(tasks[1].title == "cancelled");   // terminal, completed earlier
         CHECK(tasks[2].title == "done");
     }
+
+    // Paused is active (not terminal): it sorts among the active tasks by order.
+    {
+        Task open_first = make("open-first", today);
+        open_first.order = 1;
+        Task paused = make("paused", today);
+        paused.status = Status::PAUSED;
+        paused.order = 2;
+        Task done = make("done", today, Priority::NONE, true);
+        done.completed_at = "2026-06-06T08:00:00";
+
+        const auto agenda = build_agenda({done, paused, open_first}, today);
+        CHECK(agenda.size() == 1);
+        const auto& tasks = agenda[0].tasks;
+        CHECK(tasks[0].title == "open-first");  // order 1, active
+        CHECK(tasks[1].title == "paused");      // order 2, active (not terminal)
+        CHECK(tasks[2].title == "done");        // terminal, last
+    }
 }

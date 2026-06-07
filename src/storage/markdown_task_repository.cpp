@@ -55,6 +55,7 @@ Priority priority_from_string(std::string_view text) {
 std::string_view status_to_string(Status status) {
     switch(status) {
         case Status::IN_PROGRESS: return "in_progress";
+        case Status::PAUSED:      return "paused";
         case Status::DONE:        return "done";
         case Status::CANCELLED:   return "cancelled";
         case Status::OPEN:        break;
@@ -65,6 +66,7 @@ std::string_view status_to_string(Status status) {
 /** Parses a serialized status name (unknown values map to OPEN). */
 Status status_from_string(std::string_view text) {
     if(text == "in_progress") { return Status::IN_PROGRESS; }
+    if(text == "paused")      { return Status::PAUSED; }
     if(text == "done")        { return Status::DONE; }
     if(text == "cancelled")   { return Status::CANCELLED; }
     return Status::OPEN;

@@ -163,7 +163,7 @@ void run_markdown_task_repository_tests() {
         CHECK(repository.find_by_id("id000000")->order == 5);
     }
 
-    // status: cancelled round-trips.
+    // status: cancelled and paused round-trip.
     {
         fs::remove_all(dir, ec);
         MarkdownTaskRepository repository(tasks_dir, archive_dir);
@@ -171,6 +171,10 @@ void run_markdown_task_repository_tests() {
         task.status = Status::CANCELLED;
         repository.save(task);
         CHECK(repository.find_by_id("id000000")->status == Status::CANCELLED);
+
+        task.status = Status::PAUSED;
+        repository.update(task);
+        CHECK(repository.find_by_id("id000000")->status == Status::PAUSED);
     }
 
     // remove deletes an active file and an archived file.
