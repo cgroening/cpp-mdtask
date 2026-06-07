@@ -15,8 +15,9 @@ namespace mdtask {
 
 namespace {
 
+// The "●" marker signals a set priority (the level shows in the table color).
 const std::vector<std::string> PRIORITY_CHOICES = {
-    "none", "low", "medium", "high",
+    "none", "\xe2\x97\x8f low", "\xe2\x97\x8f medium", "\xe2\x97\x8f high",
 };
 
 /** Maps a select index to a priority (out-of-range falls back to NONE). */
@@ -36,6 +37,31 @@ std::size_t priority_to_index(Priority priority) {
         case Priority::MEDIUM: return 2;
         case Priority::HIGH:   return 3;
         case Priority::NONE:   break;
+    }
+    return 0;
+}
+
+const std::vector<std::string> STATUS_CHOICES = {
+    presentation::status_choice(Status::OPEN),
+    presentation::status_choice(Status::IN_PROGRESS),
+    presentation::status_choice(Status::DONE),
+};
+
+/** Maps a select index to a status (out-of-range falls back to OPEN). */
+Status status_from_index(std::size_t index) {
+    switch(index) {
+        case 1:  return Status::IN_PROGRESS;
+        case 2:  return Status::DONE;
+        default: return Status::OPEN;
+    }
+}
+
+/** Maps a status to its select index. */
+std::size_t status_to_index(Status status) {
+    switch(status) {
+        case Status::IN_PROGRESS: return 1;
+        case Status::DONE:        return 2;
+        case Status::OPEN:        break;
     }
     return 0;
 }
@@ -80,6 +106,7 @@ struct FormResult {
     std::optional<std::chrono::year_month_day> due;
     Priority priority;
     bool someday;
+    Status status;
 };
 
 /**
@@ -165,6 +192,13 @@ std::optional<FormResult> run_task_form(
     );
 
     form.row_begin();
+    const int status_id = form.add_select(
+        "Status", STATUS_CHOICES,
+        existing ? status_to_index(existing->status) : 0,
+        {.width_mode = SC_FWIDTH_PCT, .width = 33}
+    );
+
+    form.row_begin();
     const int description_id = form.add_text(
         "Description", existing ? existing->description : "",
         {.width_mode = SC_FWIDTH_AUTO, .col_span = 3, .height = 6,
@@ -180,6 +214,7 @@ std::optional<FormResult> run_task_form(
     result.description = std::string(form.get_string(description_id));
     result.priority = priority_from_index(form.get_choice(priority_id));
     result.someday = form.get_bool(someday_id);
+    result.status = status_from_index(form.get_choice(status_id));
 
     // An empty / cleared date field means "no due date" (an Inbox task).
     if(const auto picked = form.get_date(due_id);
@@ -210,6 +245,12 @@ std::optional<Task> run_new_task_form(
         sparcli::alert::warning(created.error().message);
         return std::nullopt;
     }
+    // A new task starts open; honor a non-default status chosen in the form.
+    if(fields->status != Status::OPEN) {
+        if(const auto updated = service.set_status(created->id, fields->status)) {
+            return *updated;
+        }
+    }
     return *created;
 }
 
@@ -227,6 +268,7 @@ std::optional<Task> run_edit_task_form(
     updated.due = fields->due;
     updated.priority = fields->priority;
     updated.someday = fields->someday;
+    updated.status = fields->status;
 
     const auto saved = service.update_task(updated);
     if(!saved) {

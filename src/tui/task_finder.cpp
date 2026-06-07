@@ -18,8 +18,9 @@ namespace mdtask {
 
 namespace {
 
-// Table columns. The title is column 1 so the priority marker can lead.
-enum { COL_PRIORITY, COL_TASK, COL_DUE, COL_STATUS, N_COLS };
+// Table columns: two leading icon columns (priority, status), then the title
+// and the due/done date.
+enum { COL_PRIORITY, COL_STATUS, COL_TASK, COL_DUE, N_COLS };
 
 // Shortcut ids reported via Shortcuts::fired() (-1 = a bare Enter).
 enum {
@@ -31,7 +32,18 @@ enum {
     ACT_TOGGLE_ARCHIVE = 6,
     ACT_RESTORE        = 7,
     ACT_JUMP           = 8,
+    ACT_CYCLE_STATUS   = 9,
 };
+
+/** Next status when cycling: open -> in progress -> done -> open. */
+Status next_status(Status status) {
+    switch(status) {
+        case Status::OPEN:        return Status::IN_PROGRESS;
+        case Status::IN_PROGRESS: return Status::DONE;
+        case Status::DONE:        break;
+    }
+    return Status::OPEN;
+}
 
 /** A section the jump picker can move the cursor to. */
 struct JumpTarget {
@@ -59,7 +71,8 @@ void add_task_row(
     RowIndex& rows,
     std::size_t& index
 ) {
-    const bool overdue = task.due && *task.due < today && !task.done;
+    const bool overdue =
+        task.due && *task.due < today && task.status != Status::DONE;
 
     // The Due/Done column shows the completion date (green) for a done task,
     // otherwise the due date (dim).
@@ -68,7 +81,7 @@ void add_task_row(
     );
     std::string due_done_text;
     sparcli::TextStyle due_done_style;
-    if(task.done && !completed.empty()) {
+    if(task.status == Status::DONE && !completed.empty()) {
         due_done_text = completed;
         due_done_style = sparcli::style(
             SC_TEXT_ATTR_NONE, sparcli::palette::green()
@@ -82,15 +95,15 @@ void add_task_row(
     finder.add_row_styled(
         {
             presentation::priority_symbol(task.priority),
+            presentation::status_symbol(task, overdue),
             task.title,
             due_done_text,
-            presentation::status_text(task, overdue),
         },
         {
             presentation::priority_style(task.priority),
+            presentation::status_style(task, overdue),
             presentation::title_style(task),
             due_done_style,
-            presentation::status_style(task, overdue),
         }
     );
 
@@ -259,7 +272,7 @@ void run_task_finder(TaskService& service, const Config& config) {
     }
 
     static const char* const HEADERS[N_COLS] =
-        {"!", "Task", "Due/Done", "Status"};
+        {"!", "\xe2\x97\x8c", "Task", "Due/Done"};   // ◌ = status
 
     std::uint64_t focus = 0;    // task id to keep the cursor on after a rebuild
     bool show_archive = false;  // toggles the agenda vs the read-only archive
@@ -281,6 +294,8 @@ void run_task_finder(TaskService& service, const Config& config) {
              .on_return(sparcli::key_char('s'), ACT_JUMP, "section");
         } else {
             shortcuts.on_return(sparcli::key_char('d'), ACT_TOGGLE_DONE, "done")
+                     .on_return(sparcli::key_char('p'), ACT_CYCLE_STATUS,
+                                "progress")
                      .on_return(sparcli::key_char('+'), ACT_SHIFT_PLUS, "+1d")
                      .on_return(sparcli::key_char('='), ACT_SHIFT_PLUS)
                      .on_return(sparcli::key_char('-'), ACT_SHIFT_MINUS, "-1d")
@@ -391,6 +406,9 @@ void run_task_finder(TaskService& service, const Config& config) {
 
         switch(action) {
             case ACT_TOGGLE_DONE: report(service.toggle_done(task.id)); break;
+            case ACT_CYCLE_STATUS:
+                report(service.set_status(task.id, next_status(task.status)));
+                break;
             case ACT_SHIFT_PLUS:  report(service.shift_due(task.id, 1)); break;
             case ACT_SHIFT_MINUS: report(service.shift_due(task.id, -1)); break;
             case ACT_ARCHIVE:     report(service.archive_task(task.id)); break;

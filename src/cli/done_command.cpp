@@ -82,7 +82,8 @@ int DoneCommand::run(const sparcli::Args& args) {
         return report_error(task.error());
     }
 
-    const std::string label = task->done ? "Done   " : "Reopened";
+    const std::string label =
+        task->status == Status::DONE ? "Done   " : "Reopened";
     sparcli::print(
         label + " ", sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::green())
     );

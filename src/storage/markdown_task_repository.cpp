@@ -51,6 +51,23 @@ Priority priority_from_string(std::string_view text) {
     return Priority::NONE;
 }
 
+/** Serialized name for a status. */
+std::string_view status_to_string(Status status) {
+    switch(status) {
+        case Status::IN_PROGRESS: return "in_progress";
+        case Status::DONE:        return "done";
+        case Status::OPEN:        break;
+    }
+    return "open";
+}
+
+/** Parses a serialized status name (unknown values map to OPEN). */
+Status status_from_string(std::string_view text) {
+    if(text == "in_progress") { return Status::IN_PROGRESS; }
+    if(text == "done")        { return Status::DONE; }
+    return Status::OPEN;
+}
+
 /** Reads an object member as a string, or a fallback when absent. */
 std::string string_or(
     serde::View object, std::string_view key, std::string_view fallback
@@ -109,7 +126,9 @@ serde::Value task_to_frontmatter(const Task& task) {
         "priority", serde::Value::string(priority_to_string(task.priority))
     );
     frontmatter.set("someday", serde::Value::boolean(task.someday));
-    frontmatter.set("done", serde::Value::boolean(task.done));
+    frontmatter.set(
+        "status", serde::Value::string(status_to_string(task.status))
+    );
     if(task.completed_at) {
         frontmatter.set(
             "completed_at", serde::Value::string(*task.completed_at)
@@ -149,7 +168,13 @@ Task document_to_task(const MarkdownDocument& document, const fs::path& path) {
     task.priority =
         priority_from_string(string_or(frontmatter, "priority", "none"));
     task.someday = bool_or(frontmatter, "someday", false);
-    task.done = bool_or(frontmatter, "done", false);
+    if(const auto status = frontmatter.get("status").as_string()) {
+        task.status = status_from_string(*status);
+    } else {
+        // Legacy files only have the `done` bool; map it onto the new status.
+        task.status = bool_or(frontmatter, "done", false) ? Status::DONE
+                                                          : Status::OPEN;
+    }
     const std::string completed = string_or(frontmatter, "completed_at", "");
     if(!completed.empty()) {
         task.completed_at = completed;

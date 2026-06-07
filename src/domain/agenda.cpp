@@ -23,7 +23,7 @@ auto order_key(const Task& task) {
         task.due ? std::chrono::sys_days{*task.due}
                  : std::chrono::sys_days::max();
     return std::make_tuple(
-        task.done,
+        task.status == Status::DONE,
         due,
         -static_cast<int>(task.priority),
         task.title

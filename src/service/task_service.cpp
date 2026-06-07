@@ -44,6 +44,20 @@ std::string generate_id() {
     return id;
 }
 
+/**
+ * Aligns `completed_at` with the task's status: a DONE task gets a timestamp
+ * (kept if it already has one), any other status clears it.
+ */
+void reconcile_completed_at(Task& task) {
+    if(task.status == Status::DONE) {
+        if(!task.completed_at) {
+            task.completed_at = now_timestamp();
+        }
+    } else {
+        task.completed_at.reset();
+    }
+}
+
 }  // namespace
 
 TaskService::TaskService(TaskRepository& repository)
@@ -64,7 +78,7 @@ Result<Task> TaskService::add_task(const NewTask& fields) {
         .due         = fields.due,
         .priority    = fields.priority,
         .someday     = fields.someday,
-        .done        = false,
+        .status      = Status::OPEN,
         .created     = today(),
         .project     = fields.project,
     };
@@ -81,6 +95,7 @@ Result<Task> TaskService::update_task(Task task) {
         );
     }
     task.title = clean_title;
+    reconcile_completed_at(task);
     repository_.update(task);
     return task;
 }
@@ -95,28 +110,38 @@ std::vector<Task> TaskService::archived_tasks() const {
 
 std::vector<Task> TaskService::open_tasks() const {
     auto tasks = repository_.find_all();
-    const auto removed = std::ranges::remove_if(tasks, &Task::done);
+    const auto removed = std::ranges::remove_if(tasks, [](const Task& task) {
+        return task.status == Status::DONE;
+    });
     tasks.erase(removed.begin(), removed.end());
     return tasks;
 }
 
-Result<Task> TaskService::toggle_done(const std::string& id) {
+Result<Task> TaskService::set_status(const std::string& id, Status status) {
     auto task = repository_.find_by_id(id);
     if(!task) {
         return std::unexpected(task_not_found_error(id));
     }
 
-    task->done = !task->done;
-    if(task->done) {
-        task->completed_at = now_timestamp();
-    } else {
-        task->completed_at.reset();
-    }
+    task->status = status;
+    reconcile_completed_at(*task);
     repository_.update(*task);
     sparcli::logging::info(
-        "task " + id + (task->done ? " marked done" : " reopened")
+        "task " + id + " status set to "
+            + std::to_string(static_cast<int>(status))
     );
     return *task;
+}
+
+Result<Task> TaskService::toggle_done(const std::string& id) {
+    const auto task = repository_.find_by_id(id);
+    if(!task) {
+        return std::unexpected(task_not_found_error(id));
+    }
+    // Toggle between DONE and OPEN; in-progress counts as not-done.
+    return set_status(
+        id, task->status == Status::DONE ? Status::OPEN : Status::DONE
+    );
 }
 
 Result<Task> TaskService::shift_due(const std::string& id, int days) {

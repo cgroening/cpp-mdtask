@@ -40,9 +40,17 @@ void print_table(const std::vector<Task>& tasks) {
     table.add_column("Title", {.halign = SC_ALIGN_LEFT});
 
     for(const auto& task : tasks) {
-        const auto status = task.done
-            ? sparcli::cell_markup("[green]done[/]")
-            : sparcli::cell_markup("[dim]open[/]");
+        const auto status = [&] {
+            switch(task.status) {
+                case Status::DONE:
+                    return sparcli::cell_markup("[green]done[/]");
+                case Status::IN_PROGRESS:
+                    return sparcli::cell_markup("[yellow]in progress[/]");
+                case Status::OPEN:
+                    break;
+            }
+            return sparcli::cell_markup("[dim]open[/]");
+        }();
         table.add_row({
             sparcli::cell(task.id),
             status,
@@ -61,10 +69,13 @@ void print_table(const std::vector<Task>& tasks) {
 /** Output example: one task per line, suitable for piping into other tools. */
 void print_plain(const std::vector<Task>& tasks) {
     for(const auto& task : tasks) {
+        const char* status = task.status == Status::DONE          ? "done"
+                           : task.status == Status::IN_PROGRESS   ? "in_progress"
+                                                                  : "open";
         std::println(
             "{}\t{}\t{}\t{}\t{}",
             task.id,
-            task.done ? "done" : "open",
+            status,
             priority_name(task.priority),
             due_text(task),
             task.title

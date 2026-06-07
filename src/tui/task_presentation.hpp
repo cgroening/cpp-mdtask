@@ -52,11 +52,17 @@ namespace mdtask::presentation {
 /** Color/attributes for the priority marker cell. */
 [[nodiscard]] sparcli::TextStyle priority_style(Priority priority);
 
-/** Short status word for a task ("done", "overdue" or "open"). */
-[[nodiscard]] std::string status_text(const Task& task, bool overdue);
+/** Single-glyph status marker (✓ done, ◐ in progress, ⚠ overdue, ○ open). */
+[[nodiscard]] std::string status_symbol(const Task& task, bool overdue);
 
 /** Color/attributes for the status cell. */
 [[nodiscard]] sparcli::TextStyle status_style(const Task& task, bool overdue);
+
+/** Plain status name ("Open", "In progress", "Done"). */
+[[nodiscard]] std::string status_label(Status status);
+
+/** Symbol + text for the form's status select (e.g. "◐ In progress"). */
+[[nodiscard]] std::string status_choice(Status status);
 
 /** Style for the title cell (dimmed once the task is done). */
 [[nodiscard]] sparcli::TextStyle title_style(const Task& task);

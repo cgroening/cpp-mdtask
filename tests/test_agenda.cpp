@@ -32,7 +32,7 @@ Task make(
     task.title = std::move(title);
     task.due = due;
     task.priority = priority;
-    task.done = done;
+    task.status = done ? Status::DONE : Status::OPEN;
     task.someday = someday;
     return task;
 }

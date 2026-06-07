@@ -79,6 +79,18 @@ public:
     [[nodiscard]] Result<Task> toggle_done(const std::string& id);
 
     /**
+     * Sets a task's lifecycle status, recording or clearing the completion
+     * timestamp to match (DONE records it; any other status clears it).
+     *
+     * @param id     Id of an existing task.
+     * @param status The new status.
+     * @return The updated task, or a NOT_FOUND error.
+     */
+    [[nodiscard]] Result<Task> set_status(
+        const std::string& id, Status status
+    );
+
+    /**
      * Shifts a task's due date by `days`. A task without a due date receives
      * one relative to today, so shifting can pull an Inbox task onto the
      * calendar.

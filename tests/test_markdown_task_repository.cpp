@@ -6,6 +6,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 using namespace mdtask;
@@ -102,7 +103,7 @@ void run_markdown_task_repository_tests() {
         MarkdownTaskRepository repository(tasks_dir, archive_dir);
         Task done = sample_task();
         done.due = ymd(2026, 6, 10);
-        done.done = true;
+        done.status = Status::DONE;
         done.completed_at = "2026-06-06T09:00:00";
         repository.archive(done);
 
@@ -125,6 +126,26 @@ void run_markdown_task_repository_tests() {
         CHECK(!any_file_named(
             archive_dir / "2026" / "06", "2026-06-10--pay-the-invoice.md"
         ));
+    }
+
+    // status round-trips through the file, and a legacy `done:`-only file (no
+    // `status:`) is read as DONE.
+    {
+        fs::remove_all(dir, ec);
+        MarkdownTaskRepository repository(tasks_dir, archive_dir);
+
+        Task in_progress = sample_task();
+        in_progress.status = Status::IN_PROGRESS;
+        repository.save(in_progress);
+        CHECK(repository.find_by_id("id000000")->status
+              == Status::IN_PROGRESS);
+
+        fs::create_directories(tasks_dir, ec);
+        std::ofstream(tasks_dir / "legacy.md")
+            << "---\nid: legacy1\ntitle: Legacy\ndone: true\n---\n# Legacy\n";
+        const auto legacy = repository.find_by_id("legacy1");
+        CHECK(legacy.has_value());
+        CHECK(legacy->status == Status::DONE);
     }
 
     fs::remove_all(dir, ec);

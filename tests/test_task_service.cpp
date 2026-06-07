@@ -34,7 +34,7 @@ void run_service_tests() {
         CHECK(task.has_value());
         CHECK(task->title == "Write tests");
         CHECK(!task->id.empty());
-        CHECK(!task->done);
+        CHECK(task->status == Status::OPEN);
         CHECK(service.all_tasks().size() == 1);
     }
 
@@ -77,13 +77,38 @@ void run_service_tests() {
 
         const auto done = service.toggle_done(created->id);
         CHECK(done.has_value());
-        CHECK(done->done);
+        CHECK(done->status == Status::DONE);
         CHECK(done->completed_at.has_value());
 
         const auto reopened = service.toggle_done(created->id);
         CHECK(reopened.has_value());
-        CHECK(!reopened->done);
+        CHECK(reopened->status == Status::OPEN);
         CHECK(!reopened->completed_at.has_value());
+    }
+
+    // set_status walks the lifecycle and manages completed_at.
+    {
+        InMemoryTaskRepository repository;
+        TaskService service(repository);
+
+        const auto created = service.add_task({.title = "Lifecycle"});
+        CHECK(created.has_value());
+
+        const auto progress =
+            service.set_status(created->id, Status::IN_PROGRESS);
+        CHECK(progress.has_value());
+        CHECK(progress->status == Status::IN_PROGRESS);
+        CHECK(!progress->completed_at.has_value());
+
+        const auto done = service.set_status(created->id, Status::DONE);
+        CHECK(done.has_value());
+        CHECK(done->completed_at.has_value());
+
+        const auto open = service.set_status(created->id, Status::OPEN);
+        CHECK(open.has_value());
+        CHECK(!open->completed_at.has_value());
+
+        CHECK(!service.set_status("nope", Status::DONE).has_value());
     }
 
     // toggle_done on an unknown id reports a not-found error.

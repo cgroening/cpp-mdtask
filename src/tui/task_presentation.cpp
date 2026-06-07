@@ -118,16 +118,26 @@ sparcli::TextStyle priority_style(Priority priority) {
     return sparcli::TextStyle{};
 }
 
-std::string status_text(const Task& task, bool overdue) {
-    if(task.done) {
-        return "done";
+std::string status_symbol(const Task& task, bool overdue) {
+    switch(task.status) {
+        case Status::DONE:        return "\xe2\x9c\x93";          // ✓
+        case Status::IN_PROGRESS: return "\xe2\x97\x90";          // ◐
+        case Status::OPEN:        break;
     }
-    return overdue ? "overdue" : "open";
+    return overdue ? "\xe2\x9a\xa0" : "\xe2\x97\x8b";   // ⚠ : ○
 }
 
 sparcli::TextStyle status_style(const Task& task, bool overdue) {
-    if(task.done) {
-        return sparcli::style(SC_TEXT_ATTR_NONE, sparcli::palette::green());
+    switch(task.status) {
+        case Status::DONE:
+            return sparcli::style(SC_TEXT_ATTR_NONE, sparcli::palette::green());
+        case Status::IN_PROGRESS:
+            return sparcli::style(
+                SC_TEXT_ATTR_BOLD,
+                overdue ? sparcli::palette::red() : sparcli::palette::yellow()
+            );
+        case Status::OPEN:
+            break;
     }
     if(overdue) {
         return sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::red());
@@ -135,8 +145,27 @@ sparcli::TextStyle status_style(const Task& task, bool overdue) {
     return sparcli::style(SC_TEXT_ATTR_DIM);
 }
 
+std::string status_label(Status status) {
+    switch(status) {
+        case Status::IN_PROGRESS: return "In progress";
+        case Status::DONE:        return "Done";
+        case Status::OPEN:        break;
+    }
+    return "Open";
+}
+
+std::string status_choice(Status status) {
+    // Symbol + text for the form's status select (non-overdue glyphs).
+    switch(status) {
+        case Status::IN_PROGRESS: return "\xe2\x97\x90 In progress";  // ◐
+        case Status::DONE:        return "\xe2\x9c\x93 Done";         // ✓
+        case Status::OPEN:        break;
+    }
+    return "\xe2\x97\x8b Open";   // ○
+}
+
 sparcli::TextStyle title_style(const Task& task) {
-    if(task.done) {
+    if(task.status == Status::DONE) {
         return sparcli::style(
             static_cast<ScTextAttribute>(SC_TEXT_ATTR_DIM | SC_TEXT_ATTR_STRIKE)
         );

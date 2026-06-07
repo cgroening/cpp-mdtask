@@ -14,6 +14,13 @@ enum class Priority {
     HIGH,
 };
 
+/** Lifecycle state of a task; "overdue" is derived (not stored). */
+enum class Status {
+    OPEN,
+    IN_PROGRESS,
+    DONE,
+};
+
 /**
  * A single task: the central domain entity, backed by one Markdown file.
  *
@@ -42,10 +49,10 @@ struct Task {
     /** True marks a dateless task as deliberately "someday" (WITHOUT DATE). */
     bool someday = false;
 
-    /** Completion flag; a done task stays in place until archived. */
-    bool done = false;
+    /** Lifecycle state; a DONE task stays in place until archived. */
+    Status status = Status::OPEN;
 
-    /** ISO timestamp recorded when the task was marked done (empty if open). */
+    /** ISO timestamp recorded while the task is DONE (empty otherwise). */
     std::optional<std::string> completed_at;
 
     /** Creation date (immutable once set). */
