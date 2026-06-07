@@ -30,6 +30,13 @@ enum {
     ACT_NEW            = 5,
     ACT_TOGGLE_ARCHIVE = 6,
     ACT_RESTORE        = 7,
+    ACT_JUMP           = 8,
+};
+
+/** A section the jump picker can move the cursor to. */
+struct JumpTarget {
+    std::string label;        /**< Section header shown in the picker. */
+    std::uint64_t first_id;   /**< Finder id of the section's first task. */
 };
 
 /** Stable finder row id derived from a task's id. */
@@ -122,7 +129,7 @@ RowIndex populate(
 /** Fills the finder with archived tasks grouped by completion month/year. */
 RowIndex populate_archive(
     sparcli::Fuzzy& finder,
-    const std::vector<Task>& archived,
+    const std::vector<ArchiveGroup>& groups,
     std::chrono::year_month_day today,
     DateFormat format
 ) {
@@ -134,7 +141,7 @@ RowIndex populate_archive(
         sparcli::palette::bg_lighten_3()
     );
 
-    for(const auto& group : group_archive(archived, today)) {
+    for(const auto& group : groups) {
         finder.add_section_styled(group.header, header_style);
         rows.by_index.emplace_back(std::nullopt);
         ++index;
@@ -144,6 +151,30 @@ RowIndex populate_archive(
         }
     }
     return rows;
+}
+
+/** Opens a section picker; returns the chosen target's first-task id, or 0. */
+std::uint64_t run_section_jump(const std::vector<JumpTarget>& targets) {
+    if(targets.size() < 2) {
+        return 0;   // nothing to pick between
+    }
+    sparcli::Select picker(sparcli::SelectOpts{
+        .prompt = "Jump to section",
+        .accent = sparcli::palette::purple(),
+        .box = {
+            .enabled = true,
+            .border = {.type = SC_BORDER_ROUNDED,
+                       .color = sparcli::palette::purple()},
+            .width_mode = SC_WIDTH_FULL,
+        },
+    });
+    for(const auto& target : targets) {
+        picker.add(target.label);
+    }
+    if(const auto choice = picker.run_one()) {
+        return targets[*choice].first_id;
+    }
+    return 0;
 }
 
 /** Builds the pinned full-screen header for the agenda or the archive view. */
@@ -246,7 +277,8 @@ void run_task_finder(TaskService& service, const Config& config) {
         if(show_archive) {
             shortcuts.on_return(
                 sparcli::key_char('v'), ACT_TOGGLE_ARCHIVE, "agenda"
-            ).on_return(sparcli::key_char('r'), ACT_RESTORE, "restore");
+            ).on_return(sparcli::key_char('r'), ACT_RESTORE, "restore")
+             .on_return(sparcli::key_char('s'), ACT_JUMP, "section");
         } else {
             shortcuts.on_return(sparcli::key_char('d'), ACT_TOGGLE_DONE, "done")
                      .on_return(sparcli::key_char('+'), ACT_SHIFT_PLUS, "+1d")
@@ -254,6 +286,7 @@ void run_task_finder(TaskService& service, const Config& config) {
                      .on_return(sparcli::key_char('-'), ACT_SHIFT_MINUS, "-1d")
                      .on_return(sparcli::key_char('a'), ACT_ARCHIVE, "archive")
                      .on_return(sparcli::key_char('n'), ACT_NEW, "new")
+                     .on_return(sparcli::key_char('s'), ACT_JUMP, "section")
                      .on_return(sparcli::key_char('v'), ACT_TOGGLE_ARCHIVE,
                                 "archive view");
         }
@@ -277,13 +310,28 @@ void run_task_finder(TaskService& service, const Config& config) {
         shortcuts.apply(opts);
         sparcli::Fuzzy finder(opts);
 
+        // Populate the view and, in step, collect the section jump targets.
         RowIndex rows;
+        std::vector<JumpTarget> jump_targets;
         if(show_archive) {
-            rows = populate_archive(finder, archived, today, config.date_format);
+            const auto groups = group_archive(archived, today);
+            rows = populate_archive(finder, groups, today, config.date_format);
+            for(const auto& group : groups) {
+                jump_targets.push_back(
+                    {group.header, row_id(group.tasks.front().id)}
+                );
+            }
         } else {
-            rows = populate(
-                finder, build_agenda(active, today), today, config.date_format
-            );
+            const auto agenda = build_agenda(active, today);
+            rows = populate(finder, agenda, today, config.date_format);
+            for(const auto& section : agenda) {
+                jump_targets.push_back({
+                    presentation::section_header(
+                        section, today, config.date_format
+                    ),
+                    row_id(section.tasks.front().id),
+                });
+            }
         }
         if(focus != 0) {
             if(const auto found = rows.index_by_id.find(focus);
@@ -305,6 +353,13 @@ void run_task_finder(TaskService& service, const Config& config) {
             }
             show_archive = !show_archive;
             focus = 0;   // start at the top of the view we switch to
+            continue;
+        }
+
+        if(action == ACT_JUMP) {
+            if(const std::uint64_t target = run_section_jump(jump_targets)) {
+                focus = target;   // land on the section's first task on rebuild
+            }
             continue;
         }
 
