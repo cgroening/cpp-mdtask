@@ -1,5 +1,7 @@
-# Build artefacts
+# Build artefacts (.nosync keeps them out of file-syncing tools)
 /build/
+/build.nosync/
+/build-sanitize.nosync/
 /bin/
 *.o
 *.d

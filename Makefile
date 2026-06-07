@@ -49,7 +49,9 @@ endif
 CPPFLAGS += $(patsubst -I%,-isystem %,$(SPARCLI_CFLAGS))
 
 BIN   := bin/mdtask
-BUILD ?= build
+# `.nosync` keeps the build trees out of file-syncing tools (iCloud, etc.).
+BUILD ?= build.nosync
+SANITIZE_BUILD := build-sanitize.nosync
 
 SRC  := $(shell find src -name '*.cpp')
 OBJ  := $(SRC:%.cpp=$(BUILD)/%.o)
@@ -92,7 +94,7 @@ $(TEST_BIN): $(APP_OBJ) $(TEST_OBJ)
 # Sanitizer objects are incompatible with normal ones, so they get their own
 # build directory - a plain `make` afterwards keeps working without a clean.
 sanitize:
-	$(MAKE) test BUILD=$(BUILD)-sanitize \
+	$(MAKE) test BUILD=$(SANITIZE_BUILD) \
 	    EXTRA_CXXFLAGS="-fsanitize=address,undefined -g $(EXTRA_CXXFLAGS)"
 
 # Generate compile_commands.json for clangd/editors - no external tools
@@ -120,6 +122,6 @@ compdb:
 	@echo "wrote compile_commands.json"
 
 clean:
-	rm -rf $(BUILD) $(BUILD)-sanitize bin
+	rm -rf $(BUILD) $(SANITIZE_BUILD) bin
 
 -include $(DEPS)
