@@ -173,6 +173,7 @@ std::optional<FormResult> run_task_form(
         // start in navigation mode.
         .autoedit = existing == nullptr,
         .editor = editor.c_str(),
+        .editor_suffix = ".md",        // temp file gets a .md extension for nvim
         .fullscreen = true,            // share the finder's alternate screen
         // Two layout variants to compare:
         //  (A) SC_VALIGN_TOP + Description `.fill_height = true` -> the form
