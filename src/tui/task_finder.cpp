@@ -88,6 +88,22 @@ RowIndex populate(
     return rows;
 }
 
+/** Builds the pinned full-screen header shown above the agenda. */
+sparcli::Rendered build_header(std::size_t task_count) {
+    sparcli::Text title;
+    title.append(
+        "mdtask",
+        sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::accent())
+    );
+    title.append("  ", sparcli::style(SC_TEXT_ATTR_DIM));
+    title.append(
+        std::to_string(task_count)
+            + (task_count == 1 ? " task" : " tasks"),
+        sparcli::style(SC_TEXT_ATTR_NONE, sparcli::palette::cyan())
+    );
+    return presentation::app_header(title);
+}
+
 /** Builds the finder options (styles and behaviour) for one run. */
 sparcli::FuzzyOpts make_opts(const char* const* headers) {
     sparcli::FuzzyOpts opts{};
@@ -99,7 +115,9 @@ sparcli::FuzzyOpts make_opts(const char* const* headers) {
     opts.stretch_columns = std::uint64_t{1} << COL_TASK;
     opts.order = SC_FUZZY_ORDER_INSERTION;
     opts.section_counts = true;
-    opts.modal = true;
+    opts.fullscreen = true;            // fill the alternate screen
+    opts.valign = SC_VALIGN_TOP;
+    opts.hide_summary = true;
     opts.accent = sparcli::palette::accent();
     opts.empty_text = "No tasks - press n to add one";
     opts.selected_style =
@@ -154,12 +172,20 @@ void run_task_finder(TaskService& service, const Config& config) {
 
     std::uint64_t focus = 0;   // task id to keep the cursor on after a rebuild
 
+    // One alternate-screen session spans the whole loop, so switching between
+    // the finder and the edit form never flickers.
+    sparcli::AltScreen screen;
+
     for(;;) {
         const auto tasks = service.all_tasks();
         const auto today = mdtask::today();
         const auto agenda = build_agenda(tasks, today);
 
+        // The header is borrowed by run(), so it must outlive the finder.
+        const sparcli::Rendered header = build_header(tasks.size());
+
         sparcli::FuzzyOpts opts = make_opts(HEADERS);
+        opts.header = header.get();
         shortcuts.apply(opts);
         sparcli::Fuzzy finder(opts);
 

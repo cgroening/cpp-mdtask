@@ -41,4 +41,10 @@ namespace mdtask::presentation {
 /** Style for the title cell (dimmed once the task is done). */
 [[nodiscard]] sparcli::TextStyle title_style(const Task& task);
 
+/**
+ * Wraps a content line in the app's pinned, full-width header panel (a rounded
+ * accent border). Used as the fullscreen header above the finder and the form.
+ */
+[[nodiscard]] sparcli::Rendered app_header(const sparcli::Text& content);
+
 }  // namespace mdtask::presentation

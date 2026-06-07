@@ -93,4 +93,14 @@ sparcli::TextStyle title_style(const Task& task) {
     return sparcli::TextStyle{};
 }
 
+sparcli::Rendered app_header(const sparcli::Text& content) {
+    sparcli::PanelOpts opts{};
+    opts.border = {
+        .type = SC_BORDER_ROUNDED, .color = sparcli::palette::accent()
+    };
+    opts.full_width = true;
+    opts.padding = {.right = 1, .left = 1};
+    return sparcli::capture::panel(content, opts);
+}
+
 }  // namespace mdtask::presentation

@@ -1,5 +1,7 @@
 #include "tui/task_form.hpp"
 
+#include "tui/task_presentation.hpp"
+
 #include <sparcli.hpp>
 
 #include <chrono>
@@ -94,11 +96,37 @@ std::optional<FormResult> run_task_form(
     const std::tm due_initial =
         (existing && existing->due) ? to_tm(*existing->due) : std::tm{};
 
+    // The pinned header gives the same shell as the finder; it is borrowed by
+    // run(), so it must outlive the form.
+    sparcli::Text head;
+    head.append(
+        "mdtask", sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::accent())
+    );
+    head.append("  ", sparcli::style(SC_TEXT_ATTR_DIM));
+    if(existing) {
+        head.append(
+            "editing: ",
+            sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::yellow())
+        );
+        head.append(
+            existing->title,
+            sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::accent())
+        );
+    } else {
+        head.append(
+            "new task",
+            sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::green())
+        );
+    }
+    const sparcli::Rendered header = presentation::app_header(head);
+
     sparcli::Form form({
-        .title  = existing ? "Edit task" : "New task",
         // Magenta highlights the active cell and the inline editor panel.
         .accent = sparcli::palette::magenta(),
         .editor = editor.c_str(),
+        .fullscreen = true,            // share the finder's alternate screen
+        .valign = SC_VALIGN_TOP,
+        .header = header.get(),
     });
 
     form.row_begin();
