@@ -63,6 +63,7 @@ enum {
     ACT_TOGGLE_LIST    = 14,
     ACT_DELETE         = 15,
     ACT_QUIT           = 16,
+    ACT_NEW_OTHER      = 17,
 };
 
 /** Builds an Alt(+Shift)+named-key chord for the reorder shortcuts. */
@@ -451,6 +452,8 @@ void run_task_finder(TaskService& service, const Config& config) {
                      .on_return(sparcli::key_char('s'), ACT_JUMP, "section");
         } else if(layout == Layout::NOTES) {
             shortcuts.on_return(sparcli::key_char('n'), ACT_NEW, "new")
+                     .on_return(sparcli::key_char('N'), ACT_NEW_OTHER,
+                                "new task")
                      .on_return(sparcli::key_char('a'), ACT_ARCHIVE, "archive")
                      .on_return(alt_key(SC_KEY_UP, false), ACT_MOVE_UP, "move")
                      .on_return(alt_key(SC_KEY_DOWN, false), ACT_MOVE_DOWN)
@@ -465,6 +468,8 @@ void run_task_finder(TaskService& service, const Config& config) {
                      .on_return(sparcli::key_char('-'), ACT_SHIFT_MINUS, "-1d")
                      .on_return(sparcli::key_char('a'), ACT_ARCHIVE, "archive")
                      .on_return(sparcli::key_char('n'), ACT_NEW, "new")
+                     .on_return(sparcli::key_char('N'), ACT_NEW_OTHER,
+                                "new note")
                      .on_return(sparcli::key_char('s'), ACT_JUMP, "section")
                      .on_return(alt_key(SC_KEY_UP, false), ACT_MOVE_UP, "move")
                      .on_return(alt_key(SC_KEY_DOWN, false), ACT_MOVE_DOWN)
@@ -572,11 +577,18 @@ void run_task_finder(TaskService& service, const Config& config) {
             continue;
         }
 
-        if(action == ACT_NEW) {
-            const bool as_note = list_view == View::NOTES && !show_archive;
+        if(action == ACT_NEW || action == ACT_NEW_OTHER) {
+            // `n` creates the current view's type; `N` creates the opposite.
+            bool default_note = list_view == View::NOTES;
+            if(action == ACT_NEW_OTHER) {
+                default_note = !default_note;
+            }
             if(const auto created =
-                   run_new_task_form(service, config, as_note)) {
+                   run_new_task_form(service, config, default_note)) {
+                // Land on the new item's own list so it is visible.
                 focus = row_id(created->id);
+                list_view = created->note ? View::NOTES : View::TASKS;
+                show_archive = false;
             }
             continue;
         }
