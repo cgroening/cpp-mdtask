@@ -37,18 +37,39 @@ void sort_section(std::vector<Task>& tasks) {
 std::vector<AgendaSection> build_agenda(
     const std::vector<Task>& tasks, std::chrono::year_month_day today
 ) {
+    using namespace std::chrono;
+
+    // Individual day sections run from today through the end of next week
+    // (weeks start Monday); dated tasks beyond that fall into coarse buckets.
+    const sys_days today_days{today};
+    const int to_sunday = 7 - static_cast<int>(weekday{today_days}.iso_encoding());
+    const year_month_day end_next_week{today_days + days{to_sunday + 7}};
+    const year_month this_month{today.year(), today.month()};
+    const year_month next_month = this_month + months{1};
+
     std::vector<Task> overdue;
     std::vector<Task> inbox;
+    std::vector<Task> later_this_month;
+    std::vector<Task> next_month_tasks;
+    std::vector<Task> later;
     std::vector<Task> without_date;
     // Ordered map so day sections come out ascending without an extra sort.
-    std::map<std::chrono::year_month_day, std::vector<Task>> dated;
+    std::map<year_month_day, std::vector<Task>> dated;
 
     for(const auto& task : tasks) {
         if(task.due) {
-            if(*task.due < today) {
+            const year_month_day due = *task.due;
+            const year_month due_month{due.year(), due.month()};
+            if(due < today) {
                 overdue.push_back(task);
+            } else if(due <= end_next_week) {
+                dated[due].push_back(task);
+            } else if(due_month == this_month) {
+                later_this_month.push_back(task);
+            } else if(due_month == next_month) {
+                next_month_tasks.push_back(task);
             } else {
-                dated[*task.due].push_back(task);
+                later.push_back(task);
             }
             continue;
         }
@@ -60,23 +81,19 @@ std::vector<AgendaSection> build_agenda(
     }
 
     std::vector<AgendaSection> sections;
+    const auto add = [&](SectionKind kind, std::vector<Task>& group) {
+        if(!group.empty()) {
+            sort_section(group);
+            sections.push_back({
+                .kind  = kind,
+                .day   = std::nullopt,
+                .tasks = std::move(group),
+            });
+        }
+    };
 
-    if(!overdue.empty()) {
-        sort_section(overdue);
-        sections.push_back({
-            .kind  = SectionKind::OVERDUE,
-            .day   = std::nullopt,
-            .tasks = std::move(overdue),
-        });
-    }
-    if(!inbox.empty()) {
-        sort_section(inbox);
-        sections.push_back({
-            .kind  = SectionKind::INBOX,
-            .day   = std::nullopt,
-            .tasks = std::move(inbox),
-        });
-    }
+    add(SectionKind::OVERDUE, overdue);
+    add(SectionKind::INBOX, inbox);
     for(auto& [day, day_tasks] : dated) {
         sort_section(day_tasks);
         sections.push_back({
@@ -85,14 +102,10 @@ std::vector<AgendaSection> build_agenda(
             .tasks = std::move(day_tasks),
         });
     }
-    if(!without_date.empty()) {
-        sort_section(without_date);
-        sections.push_back({
-            .kind  = SectionKind::WITHOUT_DATE,
-            .day   = std::nullopt,
-            .tasks = std::move(without_date),
-        });
-    }
+    add(SectionKind::LATER_THIS_MONTH, later_this_month);
+    add(SectionKind::NEXT_MONTH, next_month_tasks);
+    add(SectionKind::LATER, later);
+    add(SectionKind::WITHOUT_DATE, without_date);
 
     return sections;
 }

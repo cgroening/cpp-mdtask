@@ -34,10 +34,13 @@ std::string section_header(
     DateFormat format
 ) {
     switch(section.kind) {
-        case SectionKind::OVERDUE:      return "OVERDUE";
-        case SectionKind::INBOX:        return "Inbox";
-        case SectionKind::WITHOUT_DATE: return "Without date";
-        case SectionKind::DATED:        break;
+        case SectionKind::OVERDUE:          return "OVERDUE";
+        case SectionKind::INBOX:            return "Inbox";
+        case SectionKind::LATER_THIS_MONTH: return "Later this month";
+        case SectionKind::NEXT_MONTH:       return "Next month";
+        case SectionKind::LATER:            return "Later";
+        case SectionKind::WITHOUT_DATE:     return "Without date";
+        case SectionKind::DATED:            break;
     }
 
     const auto day = section.day.value_or(today);
@@ -66,6 +69,10 @@ sparcli::TextStyle section_style(
             return bar(pal::yellow(), pal::yellow_dark());
         case SectionKind::WITHOUT_DATE:
             return bar(pal::fg_darken_2(), pal::bg_lighten_3());
+        case SectionKind::LATER_THIS_MONTH:
+        case SectionKind::NEXT_MONTH:
+        case SectionKind::LATER:
+            return bar(pal::blue(), pal::blue_dark());
         case SectionKind::DATED:
             break;
     }

@@ -105,4 +105,22 @@ void run_agenda_tests() {
         CHECK(agenda[1].day == ymd(2026, 6, 8));
         CHECK(agenda[2].day == ymd(2026, 6, 9));
     }
+
+    // Beyond next week, dated tasks fall into coarse buckets. With today on
+    // 2026-06-06 (Sat) next week ends 2026-06-14 (Sun).
+    {
+        const std::vector<Task> tasks = {
+            make("day", ymd(2026, 6, 10)),         // within next week -> DATED
+            make("this-month", ymd(2026, 6, 25)),  // past 06-14, June
+            make("next-month", ymd(2026, 7, 15)),  // July
+            make("later", ymd(2026, 9, 1)),        // beyond July
+        };
+        const auto agenda = build_agenda(tasks, today);
+        CHECK(agenda.size() == 4);
+        CHECK(agenda[0].kind == SectionKind::DATED);
+        CHECK(agenda[0].day == ymd(2026, 6, 10));
+        CHECK(agenda[1].kind == SectionKind::LATER_THIS_MONTH);
+        CHECK(agenda[2].kind == SectionKind::NEXT_MONTH);
+        CHECK(agenda[3].kind == SectionKind::LATER);
+    }
 }
