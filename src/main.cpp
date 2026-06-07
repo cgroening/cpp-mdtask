@@ -113,6 +113,9 @@ void setup_theme() {
     sparcli::palette::set("accent", sparcli::palette::purple());
     sparcli::set_theme(sparcli::InputTheme{
         .accent = sparcli::palette::purple(),
+        // Bold marks the cursor row; sparcli unions this attr with each cell's
+        // own style on the cursor row, so a completed task stays dim+strike and
+        // additionally turns bold. The bar background highlights the selection.
         .selected_style = {
             .attr = SC_TEXT_ATTR_BOLD,
             .bg   = sparcli::rgb(57, 32, 82),
