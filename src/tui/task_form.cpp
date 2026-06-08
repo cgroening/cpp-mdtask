@@ -353,9 +353,13 @@ RecurChoice run_recurrence_wizard(const std::optional<RecurrenceRule>& current) 
             }
         }
     } else {
+        // Start empty when creating (no existing interval to edit), so the user
+        // types the count instead of clearing a pre-filled default.
+        const bool has_count_seed = current && current->weekdays.empty();
         const auto value = sparcli::number_input(
             "Every how many " + REPEAT_CHOICES[*mode] + "?",
-            {.initial = static_cast<double>(count_seed), .min = 1, .max = 999,
+            {.initial = static_cast<double>(count_seed),
+             .start_empty = !has_count_seed, .min = 1, .max = 999,
              .decimals = 0,
              .box = {.enabled = true,
                      .border = {.type = SC_BORDER_ROUNDED,

@@ -684,11 +684,12 @@ void run_task_finder(TaskService& service, const Config& config) {
                 .on_return(sparcli::key_char('s'), ACT_JUMP,
                            D{.footer = "section", .help = "jump to a section"});
         } else if(view == View::RECURRING) {
-            // Projected rows are read-only; edit the underlying series via its
-            // file, and jump between the day sections.
+            // Rows are projected occurrences; Enter edits the underlying series
+            // in the form (see the default action), `e` opens its raw .md file,
+            // and `s` jumps between the day sections.
             shortcuts.section("Actions")
                 .on_return(sparcli::key_char('e'), ACT_EDIT_FILE,
-                           D{.footer = "edit",
+                           D{.footer = "edit file",
                              .help = "open the series .md file in $EDITOR"})
                 .on_return(sparcli::key_char('s'), ACT_JUMP,
                            D{.footer = "section", .help = "jump to a section"});
@@ -1093,9 +1094,17 @@ void run_task_finder(TaskService& service, const Config& config) {
             default:
                 // A bare Enter opens the editor for the cursor item. In the
                 // Recurring view the row is a virtual occurrence (its due date
-                // is projected), so editing it would persist the wrong date;
-                // use `e` to edit the underlying series file instead.
-                if(view != View::RECURRING) {
+                // is projected), so edit the real stored series instead of the
+                // projection - otherwise saving would persist the wrong date.
+                if(view == View::RECURRING) {
+                    const auto all = service.all_tasks();
+                    const auto real = std::ranges::find(all, task.id, &Task::id);
+                    if(real != all.end()) {
+                        static_cast<void>(
+                            run_edit_task_form(service, config, *real)
+                        );
+                    }
+                } else {
                     static_cast<void>(run_edit_task_form(service, config, task));
                 }
                 break;
