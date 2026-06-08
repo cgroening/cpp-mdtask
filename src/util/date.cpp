@@ -84,6 +84,30 @@ std::chrono::year_month_day shift_days(
     };
 }
 
+std::chrono::year_month_day add_months(
+    std::chrono::year_month_day date, int months
+) {
+    using namespace std::chrono;
+    const year_month target =
+        year_month{date.year(), date.month()} + std::chrono::months{months};
+    year_month_day result{target.year(), target.month(), date.day()};
+    if(!result.ok()) {
+        // The source day-of-month does not exist in the target month (e.g. the
+        // 31st in February); clamp to that month's last day.
+        result = year_month_day{
+            year_month_day_last{target.year(), month_day_last{target.month()}}
+        };
+    }
+    return result;
+}
+
+std::chrono::year_month_day add_years(
+    std::chrono::year_month_day date, int years
+) {
+    // Whole years are whole months; this also clamps Feb 29 in a non-leap year.
+    return add_months(date, years * 12);
+}
+
 int days_between(
     std::chrono::year_month_day from, std::chrono::year_month_day to
 ) {

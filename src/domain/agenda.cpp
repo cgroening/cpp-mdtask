@@ -78,6 +78,15 @@ void sort_archive_group(std::vector<Task>& tasks) {
 
 }  // namespace
 
+std::chrono::year_month_day end_of_next_week(
+    std::chrono::year_month_day today
+) {
+    using namespace std::chrono;
+    const sys_days today_days{today};
+    const int to_sunday = 7 - static_cast<int>(weekday{today_days}.iso_encoding());
+    return year_month_day{today_days + days{to_sunday + 7}};
+}
+
 std::vector<AgendaSection> build_agenda(
     const std::vector<Task>& tasks, std::chrono::year_month_day today
 ) {
@@ -85,9 +94,7 @@ std::vector<AgendaSection> build_agenda(
 
     // Individual day sections run from today through the end of next week
     // (weeks start Monday); dated tasks beyond that fall into coarse buckets.
-    const sys_days today_days{today};
-    const int to_sunday = 7 - static_cast<int>(weekday{today_days}.iso_encoding());
-    const year_month_day end_next_week{today_days + days{to_sunday + 7}};
+    const year_month_day end_next_week = end_of_next_week(today);
     const year_month this_month{today.year(), today.month()};
     const year_month next_month = this_month + months{1};
 

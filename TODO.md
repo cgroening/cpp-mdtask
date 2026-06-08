@@ -4,8 +4,8 @@
 
 - [x] **Next task suggestion** based on due date and priority for an even faster workflow
 - [x] **Open the whole task `.md` file in nvim from the finder.**
-- [ ] **Duplication of tasks and notes** for quicker creation of similar tasks
-- [ ] **Recurring tasks** (`repeat: daily/weekly/...`). A done occurrence spawns the next due date (every x days/weeks/months or on specific week days) instead of just leaving the active set. Display upcoming tasks for the current and next week, but at least the next one.
+- [x] **Duplication of tasks and notes** for quicker creation of similar tasks
+- [x] **Recurring tasks** (`repeat: daily/weekly/...`). A done occurrence rolls the same task forward to its next due date (every x days/weeks/months or on specific week days) instead of leaving the active set; the schedule basis is per task (`repeat_from: due` or `completion`). The Recurring view shows upcoming occurrences for the current and next week (at least the next one).
 - [ ] **Task categories** to group and filter tasks by a free-form label (e.g. `@home`, `work`, `errands`), stored in the front matter and usable by the v0.2 filter and search. (In v1.0, once project management exists, a task can additionally be assigned to a specific project from there.)
 
 ## v0.2 – Search, filter and review

@@ -1,10 +1,14 @@
 #include "tui/task_form.hpp"
 
+#include "domain/recurrence.hpp"
 #include "tui/task_presentation.hpp"
 
 #include <sparcli.hpp>
 
+#include <algorithm>
+#include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <ctime>
 #include <optional>
@@ -72,6 +76,47 @@ std::size_t status_to_index(Status status) {
     return 0;
 }
 
+// The recurrence row: a "Repeat" mode, an interval count, a weekday set and the
+// schedule basis. The mode index 0 is none; 1..4 are interval units; 5 is the
+// weekday set (see unit_from_repeat_index / repeat_index_from_unit).
+const std::vector<std::string> REPEAT_CHOICES = {
+    "none", "days", "weeks", "months", "years", "weekdays",
+};
+const std::vector<std::string> REPEAT_FROM_CHOICES = {
+    "due date", "completion",
+};
+const std::vector<std::string> WEEKDAY_CHOICES = {
+    "Mo", "Tu", "We", "Th", "Fr", "Sa", "Su",
+};
+
+/** The seven weekdays in the same Monday-first order as WEEKDAY_CHOICES. */
+constexpr std::array<std::chrono::weekday, 7> WEEKDAYS_MON_FIRST{{
+    std::chrono::Monday,   std::chrono::Tuesday, std::chrono::Wednesday,
+    std::chrono::Thursday, std::chrono::Friday,  std::chrono::Saturday,
+    std::chrono::Sunday,
+}};
+
+/** Maps a "Repeat" select index (1..4) to its interval unit. */
+RecurUnit unit_from_repeat_index(std::size_t index) {
+    switch(index) {
+        case 2:  return RecurUnit::WEEK;
+        case 3:  return RecurUnit::MONTH;
+        case 4:  return RecurUnit::YEAR;
+        default: return RecurUnit::DAY;
+    }
+}
+
+/** Maps an interval unit to its "Repeat" select index. */
+std::size_t repeat_index_from_unit(RecurUnit unit) {
+    switch(unit) {
+        case RecurUnit::WEEK:  return 2;
+        case RecurUnit::MONTH: return 3;
+        case RecurUnit::YEAR:  return 4;
+        case RecurUnit::DAY:   break;
+    }
+    return 1;
+}
+
 /** Seeds the date picker from a calendar day (the value fields only). */
 std::tm to_tm(std::chrono::year_month_day date) {
     std::tm seed{};
@@ -114,6 +159,7 @@ struct FormResult {
     bool someday = false;
     Status status = Status::OPEN;
     bool note = false;
+    std::optional<RecurrenceRule> recurrence;
 };
 
 /**
@@ -134,6 +180,26 @@ std::optional<FormResult> run_task_form(
     // at today; an existing due date pre-selects that day.
     const std::tm due_initial =
         (existing && existing->due) ? to_tm(*existing->due) : std::tm{};
+
+    // Recurrence seeds: derive the Repeat mode, interval, checked weekdays and
+    // basis from an existing rule (all default to "no recurrence" otherwise).
+    std::size_t repeat_seed = 0;
+    double every_seed = 1;
+    std::vector<std::size_t> weekday_seed;
+    std::size_t repeat_from_seed = 0;
+    if(existing && existing->recurrence) {
+        const RecurrenceRule& rule = *existing->recurrence;
+        repeat_from_seed = rule.basis == RecurBasis::COMPLETION ? 1 : 0;
+        if(!rule.weekdays.empty()) {
+            repeat_seed = 5;
+            for(const auto& day : rule.weekdays) {
+                weekday_seed.push_back(day.iso_encoding() - 1);
+            }
+        } else {
+            repeat_seed = repeat_index_from_unit(rule.unit);
+            every_seed = rule.interval;
+        }
+    }
 
     // The pinned header gives the same shell as the finder; it is borrowed by
     // run(), so it must outlive the form.
@@ -202,6 +268,10 @@ std::optional<FormResult> run_task_form(
     int due_id = -1;
     int someday_id = -1;
     int status_id = -1;
+    int repeat_id = -1;
+    int every_id = -1;
+    int weekdays_id = -1;
+    int repeat_from_id = -1;
     if(!is_note) {
         form.row_begin();
         priority_id = form.add_select(
@@ -238,6 +308,33 @@ std::optional<FormResult> run_task_form(
     }
     const int note_id = form.add_bool("Note", is_note, note_opts);
 
+    // Recurrence row (task only): pick a Repeat mode plus its supporting input.
+    // `Every` applies to days/weeks/months/years; `Weekdays` to the weekday set.
+    if(!is_note) {
+        form.row_begin();
+        repeat_id = form.add_select(
+            "Repeat", REPEAT_CHOICES, repeat_seed,
+            {.width_mode = SC_FWIDTH_PCT, .width = 20}
+        );
+        every_id = form.add_number(
+            "Every", every_seed,
+            {.width_mode = SC_FWIDTH_PCT, .width = 20,
+             .help = "count for days/weeks/months/years"}
+        );
+        // Spans two of the row's five columns (like Title/Description span all
+        // five), so the column grid stays uniform with the row above instead of
+        // a conflicting 40% width that would shift the other cells.
+        weekdays_id = form.add_multiselect(
+            "Weekdays", WEEKDAY_CHOICES, weekday_seed,
+            {.width_mode = SC_FWIDTH_AUTO, .col_span = 2,
+             .help = "used when Repeat = weekdays"}
+        );
+        repeat_from_id = form.add_select(
+            "Repeat from", REPEAT_FROM_CHOICES, repeat_from_seed,
+            {.width_mode = SC_FWIDTH_PCT, .width = 20}
+        );
+    }
+
     form.row_begin();
     const int description_id = form.add_text(
         "Description", existing ? existing->description : "",
@@ -273,6 +370,37 @@ std::optional<FormResult> run_task_form(
            picked && !sparcli::date_empty(*picked)) {
             result.due = from_tm(*picked);
         }
+
+        // Build the recurrence rule from the Repeat mode (0 = none).
+        const std::size_t repeat_choice = form.get_choice(repeat_id);
+        const RecurBasis basis = form.get_choice(repeat_from_id) == 1
+            ? RecurBasis::COMPLETION
+            : RecurBasis::DUE;
+        if(repeat_choice == 5) {
+            std::vector<std::chrono::weekday> weekdays;
+            for(const auto index : form.get_checked(weekdays_id)) {
+                if(index < WEEKDAYS_MON_FIRST.size()) {
+                    weekdays.push_back(WEEKDAYS_MON_FIRST[index]);
+                }
+            }
+            std::ranges::sort(weekdays, {}, [](std::chrono::weekday day) {
+                return day.iso_encoding();
+            });
+            if(!weekdays.empty()) {   // no day picked means no recurrence
+                result.recurrence = RecurrenceRule{
+                    .unit = RecurUnit::DAY, .interval = 1,
+                    .weekdays = std::move(weekdays), .basis = basis
+                };
+            }
+        } else if(repeat_choice >= 1 && repeat_choice <= 4) {
+            const int interval = std::max(
+                1, static_cast<int>(std::lround(form.get_number(every_id)))
+            );
+            result.recurrence = RecurrenceRule{
+                .unit = unit_from_repeat_index(repeat_choice),
+                .interval = interval, .weekdays = {}, .basis = basis
+            };
+        }
     }
     return result;
 }
@@ -294,6 +422,7 @@ std::optional<Task> run_new_task_form(
         .priority    = fields->priority,
         .someday     = fields->someday,
         .note        = fields->note,
+        .recurrence  = fields->recurrence,
     });
     if(!created) {
         sparcli::alert::warning(created.error().message);
@@ -325,6 +454,7 @@ std::optional<Task> run_edit_task_form(
     updated.someday = fields->someday;
     updated.status = fields->status;
     updated.note = fields->note;
+    updated.recurrence = fields->recurrence;
 
     const auto saved = service.update_task(updated);
     if(!saved) {

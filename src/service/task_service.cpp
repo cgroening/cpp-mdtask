@@ -2,6 +2,7 @@
 
 #include "domain/agenda.hpp"
 #include "domain/duplicate.hpp"
+#include "domain/recurrence.hpp"
 #include "util/date.hpp"
 
 #include <sparcli.hpp>
@@ -68,6 +69,7 @@ void normalize_note(Task& task) {
     task.status = Status::OPEN;
     task.completed_at.reset();
     task.project.clear();
+    task.recurrence.reset();
 }
 
 }  // namespace
@@ -108,9 +110,10 @@ Result<Task> TaskService::add_task(const NewTask& fields) {
         .note        = fields.note,
         .created     = today(),
         .project     = fields.project,
+        .recurrence  = fields.recurrence,
     };
     if(task.note) {
-        normalize_note(task);
+        normalize_note(task);   // a note never recurs
     }
     repository_.save(task);
     sparcli::logging::info("added task " + task.id);
@@ -168,6 +171,7 @@ Result<Task> TaskService::duplicate_task(const std::string& id) {
         .someday     = source->someday,
         .project     = source->project,
         .note        = source->note,
+        .recurrence  = source->recurrence,
     });
 }
 
@@ -218,6 +222,24 @@ Result<Task> TaskService::set_status(const std::string& id, Status status) {
     auto task = repository_.find_by_id(id);
     if(!task) {
         return std::unexpected(task_not_found_error(id));
+    }
+
+    // A recurring task never settles into a terminal state: completing it rolls
+    // the same file forward to its next occurrence and stays open, so the series
+    // keeps a single active occurrence instead of leaving the active set.
+    if(status == Status::DONE && task->recurrence) {
+        const RecurrenceRule& rule = *task->recurrence;
+        const auto base = rule.basis == RecurBasis::COMPLETION
+            ? today()
+            : task->due.value_or(today());
+        task->due = next_occurrence(rule, base, today());
+        task->someday = false;
+        task->status = Status::OPEN;
+        task->completed_at.reset();
+        task->order = append_order(task->note);   // last under its new day
+        repository_.update(*task);
+        sparcli::logging::info("recurring task " + id + " rolled forward");
+        return *task;
     }
 
     // Reopening a terminal task sends it to the end of the active tasks.

@@ -1,4 +1,5 @@
 #include "domain/errors.hpp"
+#include "domain/recurrence.hpp"
 #include "service/task_service.hpp"
 #include "storage/in_memory_task_repository.hpp"
 #include "util/date.hpp"
@@ -414,6 +415,107 @@ void run_service_tests() {
         const auto open = service.open_tasks();
         CHECK(open.size() == 1);
         CHECK(open.front().id == second->id);
+    }
+
+    // Completing a recurring task rolls it forward instead of finishing it:
+    // the same task stays OPEN with no completion stamp and a later due date.
+    {
+        InMemoryTaskRepository repository;
+        TaskService service(repository);
+
+        auto created =
+            service.add_task({.title = "Stand-up", .due = ymd(2026, 6, 10)});
+        CHECK(created.has_value());
+        Task recurring = *created;
+        recurring.recurrence = parse_recurrence("weekly", "");
+        CHECK(service.update_task(recurring).has_value());
+
+        const auto rolled = service.toggle_done(created->id);
+        CHECK(rolled.has_value());
+        CHECK(rolled->status == Status::OPEN);          // never goes terminal
+        CHECK(!rolled->completed_at.has_value());
+        CHECK(rolled->due == ymd(2026, 6, 17));         // due basis: +1 week
+        CHECK(service.open_tasks().size() == 1);         // still in the active set
+    }
+
+    // The completion basis measures the next date from today, not the due date.
+    {
+        InMemoryTaskRepository repository;
+        TaskService service(repository);
+
+        auto created = service.add_task({.title = "Water plants"});
+        CHECK(created.has_value());
+        Task recurring = *created;
+        recurring.recurrence = parse_recurrence("every 3 days", "completion");
+        CHECK(service.update_task(recurring).has_value());
+
+        const auto rolled = service.set_status(created->id, Status::DONE);
+        CHECK(rolled.has_value());
+        CHECK(rolled->status == Status::OPEN);
+        CHECK(rolled->due == shift_days(today(), 3));
+    }
+
+    // add_task carries a recurrence rule (the path the form feeds), for both an
+    // interval rule and a weekday set; a plain task stays non-recurring.
+    {
+        InMemoryTaskRepository repository;
+        TaskService service(repository);
+
+        const auto interval = service.add_task({
+            .title = "Backup", .recurrence = parse_recurrence("every 2 weeks", ""),
+        });
+        CHECK(interval.has_value());
+        CHECK(interval->recurrence.has_value());
+        CHECK(format_recurrence(*interval->recurrence) == "every 2 weeks");
+        CHECK(interval->recurrence->basis == RecurBasis::DUE);
+
+        const auto weekdays = service.add_task({
+            .title = "Gym",
+            .recurrence = parse_recurrence("mon,wed,fri", "completion"),
+        });
+        CHECK(weekdays.has_value());
+        CHECK(format_recurrence(*weekdays->recurrence) == "mon,wed,fri");
+        CHECK(weekdays->recurrence->basis == RecurBasis::COMPLETION);
+
+        const auto plain = service.add_task({.title = "Once"});
+        CHECK(plain.has_value());
+        CHECK(!plain->recurrence.has_value());
+    }
+
+    // A note never recurs, even if a rule is supplied; duplicating a recurring
+    // task copies its rule.
+    {
+        InMemoryTaskRepository repository;
+        TaskService service(repository);
+
+        const auto note = service.add_task({
+            .title = "Idea", .note = true,
+            .recurrence = parse_recurrence("daily", ""),
+        });
+        CHECK(note.has_value());
+        CHECK(!note->recurrence.has_value());
+
+        const auto source = service.add_task({
+            .title = "Report", .recurrence = parse_recurrence("monthly", ""),
+        });
+        CHECK(source.has_value());
+        const auto copy = service.duplicate_task(source->id);
+        CHECK(copy.has_value());
+        CHECK(copy->recurrence.has_value());
+        CHECK(format_recurrence(*copy->recurrence) == "monthly");
+    }
+
+    // A non-recurring task still completes normally (regression guard).
+    {
+        InMemoryTaskRepository repository;
+        TaskService service(repository);
+
+        const auto created = service.add_task({.title = "One-off"});
+        CHECK(created.has_value());
+        const auto done = service.toggle_done(created->id);
+        CHECK(done.has_value());
+        CHECK(done->status == Status::DONE);
+        CHECK(done->completed_at.has_value());
     }
 
     // update_task rejects an empty title.

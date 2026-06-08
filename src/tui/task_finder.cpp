@@ -1,6 +1,7 @@
 #include "tui/task_finder.hpp"
 
 #include "domain/agenda.hpp"
+#include "domain/recurrence.hpp"
 #include "domain/subtasks.hpp"
 #include "domain/suggestion.hpp"
 #include "tui/finder_actions.hpp"
@@ -187,11 +188,17 @@ void add_row(
                     presentation::relative_due_style(*task.due, today);
             }
 
+            // A trailing ↻ marks a recurring task in the agenda; appended so it
+            // does not interfere with title search (which matches from the left).
+            const std::string title_text = task.recurrence
+                ? task.title + " \xe2\x86\xbb"   // ↻
+                : task.title;
+
             fields = {
                 presentation::status_symbol(task, overdue),
                 presentation::priority_symbol(task.priority),
                 sub_text,
-                task.title,
+                title_text,
                 due_done_text,
                 rel_text,
             };
@@ -321,6 +328,32 @@ RowIndex populate_placeholder(sparcli::Fuzzy& finder, const std::string& text) {
     finder.set_disabled(0);          // non-selectable, greyed
     rows.by_index.emplace_back(std::nullopt);   // no task behind this row
     return rows;
+}
+
+/**
+ * Projects the recurring tasks into virtual dated occurrences for the Recurring
+ * view: each recurring task yields one copy per upcoming occurrence (this and
+ * next week, at least its next date). The copies keep the real id, so id-based
+ * actions still resolve to the underlying task; only the due date is virtual.
+ */
+std::vector<Task> recurring_occurrences(
+    const std::vector<Task>& tasks, std::chrono::year_month_day today
+) {
+    const auto window_end = end_of_next_week(today);
+    std::vector<Task> occurrences;
+    for(const auto& task : tasks) {
+        if(!task.recurrence) {
+            continue;
+        }
+        const auto from_due = task.due.value_or(today);
+        for(const auto& day :
+            upcoming_occurrences(*task.recurrence, from_due, today, window_end)) {
+            Task occurrence = task;
+            occurrence.due = day;
+            occurrences.push_back(std::move(occurrence));
+        }
+    }
+    return occurrences;
 }
 
 /** Opens a section picker; returns the chosen target's first-task id, or 0. */
@@ -603,19 +636,20 @@ void run_task_finder(TaskService& service, const Config& config) {
     for(;;) {
         const auto today = mdtask::today();
 
-        // Gather the items for the current view (RECURRING has none yet).
+        // Gather the items for the current view.
         std::vector<Task> items;
         switch(view) {
             case View::TASKS:   items = service.all_tasks(); break;
             case View::NOTES:   items = service.notes(); sort_notes(items); break;
             case View::ARCHIVE: items = service.archived_tasks(); break;
             case View::RECURRING:
+                items = recurring_occurrences(service.all_tasks(), today);
+                break;
             case View::SEARCH:  break;   // placeholder, no items
         }
         // An empty view (or a not-yet-built view) renders a single disabled
         // placeholder row, so the finder still has content to show.
-        const bool placeholder = (view == View::RECURRING)
-            || (view == View::SEARCH) || items.empty();
+        const bool placeholder = (view == View::SEARCH) || items.empty();
         const Layout layout = placeholder ? Layout::PLACEHOLDER
             : view == View::NOTES   ? Layout::NOTES
             : view == View::ARCHIVE ? Layout::ARCHIVE
@@ -639,6 +673,11 @@ void run_task_finder(TaskService& service, const Config& config) {
 
         if(view == View::ARCHIVE) {
             shortcuts.on_return(sparcli::key_char('r'), ACT_RESTORE, "restore")
+                     .on_return(sparcli::key_char('s'), ACT_JUMP, "section");
+        } else if(view == View::RECURRING) {
+            // Projected rows are read-only; edit the underlying series via its
+            // file, and jump between the day sections.
+            shortcuts.on_return(sparcli::key_char('e'), ACT_EDIT_FILE, "edit")
                      .on_return(sparcli::key_char('s'), ACT_JUMP, "section");
         } else if(view == View::NOTES) {
             shortcuts.on_return(sparcli::key_char(' '), ACT_TOGGLE_SELECT,
@@ -712,7 +751,8 @@ void run_task_finder(TaskService& service, const Config& config) {
         std::vector<JumpTarget> jump_targets;
         if(placeholder) {
             const char* message =
-                view == View::RECURRING ? "Recurring tasks are coming soon"
+                view == View::RECURRING
+                    ? "No recurring tasks - add a 'repeat:' field to a task"
                 : view == View::SEARCH
                     ? "The full search feature is coming soon."
                 : view == View::NOTES   ? "No notes yet - press n to add one"
@@ -980,8 +1020,13 @@ void run_task_finder(TaskService& service, const Config& config) {
             case ACT_MOVE_BOTTOM:
                 report(service.move_task(task.id, MoveDir::BOTTOM)); break;
             default:
-                // A bare Enter opens the editor for the cursor item.
-                static_cast<void>(run_edit_task_form(service, config, task));
+                // A bare Enter opens the editor for the cursor item. In the
+                // Recurring view the row is a virtual occurrence (its due date
+                // is projected), so editing it would persist the wrong date;
+                // use `e` to edit the underlying series file instead.
+                if(view != View::RECURRING) {
+                    static_cast<void>(run_edit_task_form(service, config, task));
+                }
                 break;
         }
         if(consumed_selection) {

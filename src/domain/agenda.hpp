@@ -50,6 +50,17 @@ struct AgendaSection {
     const std::vector<Task>& tasks, std::chrono::year_month_day today
 );
 
+/**
+ * Last day of next week relative to `today` (weeks start Monday): the inclusive
+ * upper bound of the agenda's per-day sections. Shared with the Recurring view.
+ *
+ * @param today The reference day.
+ * @return The Sunday that ends the week after the one containing `today`.
+ */
+[[nodiscard]] std::chrono::year_month_day end_of_next_week(
+    std::chrono::year_month_day today
+);
+
 /** Open/done tally for a section header (cancelled counts as done). */
 struct SectionCounts {
     int open = 0;   /**< Non-terminal tasks (open, in progress, paused). */

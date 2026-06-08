@@ -1,3 +1,4 @@
+#include "domain/recurrence.hpp"
 #include "domain/task.hpp"
 #include "service/task_service.hpp"
 #include "storage/markdown_task_repository.hpp"
@@ -178,6 +179,42 @@ void run_markdown_task_repository_tests() {
         task.status = Status::PAUSED;
         repository.update(task);
         CHECK(repository.find_by_id("id000000")->status == Status::PAUSED);
+    }
+
+    // A recurrence rule round-trips through the file, including the basis; a
+    // file without the keys loads as a non-recurring task.
+    {
+        fs::remove_all(dir, ec);
+        MarkdownTaskRepository repository(
+            tasks_dir, notes_dir, archive_dir, notes_archive_dir
+        );
+
+        Task task = sample_task();
+        task.recurrence = parse_recurrence("mon,wed,fri", "completion");
+        repository.save(task);
+
+        const auto loaded = repository.find_by_id("id000000");
+        CHECK(loaded.has_value());
+        CHECK(loaded->recurrence.has_value());
+        CHECK(loaded->recurrence->weekdays.size() == 3);
+        CHECK(loaded->recurrence->basis == RecurBasis::COMPLETION);
+        CHECK(format_recurrence(*loaded->recurrence) == "mon,wed,fri");
+
+        // The due basis is the default and omits repeat_from, but still round-
+        // trips the interval rule.
+        Task interval = sample_task();
+        interval.recurrence = parse_recurrence("every 2 weeks", "");
+        repository.update(interval);
+        const auto reloaded = repository.find_by_id("id000000");
+        CHECK(reloaded->recurrence.has_value());
+        CHECK(reloaded->recurrence->basis == RecurBasis::DUE);
+        CHECK(format_recurrence(*reloaded->recurrence) == "every 2 weeks");
+
+        // A task with no repeat key loads as non-recurring.
+        Task plain = sample_task();
+        plain.recurrence = std::nullopt;
+        repository.update(plain);
+        CHECK(!repository.find_by_id("id000000")->recurrence.has_value());
     }
 
     // remove deletes an active file and an archived file.

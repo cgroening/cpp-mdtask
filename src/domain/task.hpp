@@ -1,5 +1,7 @@
 #pragma once
 
+#include "domain/recurrence.hpp"
+
 #include <chrono>
 #include <optional>
 #include <string>
@@ -77,6 +79,9 @@ struct Task {
 
     /** Owning project's id; empty means the task has no project. */
     std::string project;
+
+    /** Recurrence rule; empty means the task does not repeat. */
+    std::optional<RecurrenceRule> recurrence;
 };
 
 }  // namespace mdtask

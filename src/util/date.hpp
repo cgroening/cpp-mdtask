@@ -45,6 +45,30 @@ namespace mdtask {
     std::chrono::year_month_day date, int days
 );
 
+/**
+ * Adds a (possibly negative) number of whole months, clamping the day to the
+ * last valid day of the target month (e.g. Jan 31 + 1 month -> Feb 28/29).
+ *
+ * @param date   Starting day.
+ * @param months Offset in months (negative moves into the past).
+ * @return The resulting calendar day, day-of-month clamped where needed.
+ */
+[[nodiscard]] std::chrono::year_month_day add_months(
+    std::chrono::year_month_day date, int months
+);
+
+/**
+ * Adds a (possibly negative) number of whole years, clamping Feb 29 to Feb 28
+ * in a non-leap target year.
+ *
+ * @param date  Starting day.
+ * @param years Offset in years (negative moves into the past).
+ * @return The resulting calendar day.
+ */
+[[nodiscard]] std::chrono::year_month_day add_years(
+    std::chrono::year_month_day date, int years
+);
+
 /** Whole-day difference `to - from` (positive when `to` is in the future). */
 [[nodiscard]] int days_between(
     std::chrono::year_month_day from, std::chrono::year_month_day to

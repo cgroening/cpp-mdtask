@@ -45,6 +45,31 @@ Rechnung 4711. (free-form Markdown body, e.g. subtasks as checkboxes)
 - `completed_at` is recorded when a task is marked done.
 - Archiving moves the file to `archive/<year>/<month>/` instead of deleting it.
 
+## Recurring tasks
+
+Add a `repeat:` field to make a task recur. Marking it done does not finish it –
+it rolls the same file forward to its next due date and stays open, so the
+series always keeps a single active occurrence:
+
+```yaml
+repeat: weekly        # daily | weekly | monthly | yearly
+                      # every 3 days | every 2 weeks | every 6 months
+                      # mon,wed,fri   (a set of weekdays)
+repeat_from: due      # due (default) or completion
+```
+
+- `repeat_from: due` keeps a fixed cadence (a weekly meeting stays on its
+  weekday even if you check it off early or late); a long-overdue series jumps
+  straight to its next future date.
+- `repeat_from: completion` measures the next date from the day you complete it
+  (e.g. `every 3 days` restarts the clock when you do it).
+
+A recurring task is marked with a trailing `↻` in the agenda. The **Recurring**
+view (`2`) lists each series' upcoming occurrences for the current and next week
+(at least the next one). Set recurrence in the task form (the **Repeat** field –
+pick a unit and count, or a set of weekdays, plus **Repeat from**); set Repeat to
+`none` to end the series. Editing the task's `.md` file (`e`) works too.
+
 ## Agenda sections
 
 Sections are computed from the front matter and only shown when non-empty:
@@ -59,7 +84,7 @@ Sections are computed from the front matter and only shown when non-empty:
 Modal (vim-style): the finder starts in normal mode.
 
 - `1` / `2` / `3` / `4` / `5` – switch view: Tasks / Recurring / Notes /
-  Archive / Search (Recurring and Search are placeholders for now).
+  Archive / Search (Search is a placeholder for now).
 - `Enter` – edit the task in a form (Ctrl-G opens the description in `$EDITOR`).
 - `e` – open the whole `.md` file in `$EDITOR` (or the configured `editor`); the
   file is reloaded and renamed afterwards if its due date or title changed.

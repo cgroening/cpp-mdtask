@@ -1,6 +1,7 @@
 #pragma once
 
 #include "domain/errors.hpp"
+#include "domain/recurrence.hpp"
 #include "domain/task.hpp"
 #include "storage/task_repository.hpp"
 
@@ -24,6 +25,7 @@ struct NewTask {
     bool someday = false;                             /**< Mark as someday. */
     std::string project;                              /**< Optional project. */
     bool note = false;                                /**< Create as a note. */
+    std::optional<RecurrenceRule> recurrence;         /**< Optional recurrence. */
 };
 
 /**

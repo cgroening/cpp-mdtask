@@ -1,6 +1,7 @@
 #include "storage/markdown_task_repository.hpp"
 
 #include "domain/errors.hpp"
+#include "domain/recurrence.hpp"
 #include "storage/markdown_document.hpp"
 #include "util/date.hpp"
 
@@ -158,6 +159,18 @@ serde::Value task_to_frontmatter(const Task& task) {
     if(!task.project.empty()) {
         frontmatter.set("project", serde::Value::string(task.project));
     }
+    if(task.recurrence) {
+        frontmatter.set(
+            "repeat",
+            serde::Value::string(format_recurrence(*task.recurrence))
+        );
+        // The due basis is the default, so only the completion basis is written.
+        if(task.recurrence->basis == RecurBasis::COMPLETION) {
+            frontmatter.set(
+                "repeat_from", serde::Value::string("completion")
+            );
+        }
+    }
     return frontmatter;
 }
 
@@ -205,6 +218,10 @@ Task document_to_task(const MarkdownDocument& document, const fs::path& path) {
     task.created =
         parse_iso_date(string_or(frontmatter, "created", "")).value_or(today());
     task.project = string_or(frontmatter, "project", "");
+    task.recurrence = parse_recurrence(
+        string_or(frontmatter, "repeat", ""),
+        string_or(frontmatter, "repeat_from", "")
+    );
     return task;
 }
 
