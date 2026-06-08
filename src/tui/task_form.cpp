@@ -453,6 +453,7 @@ std::optional<FormResult> run_task_form(
     // A note's grid is single-column; a task's title/description span all five.
     const int wide_span = is_note ? 1 : 5;
     constexpr int ACT_EDIT_RECURRENCE = 1;
+    constexpr int ACT_SAVE = 2;
 
     bool dirty = false;   // any edit (a field or the wizard) across all passes
     bool first = true;
@@ -472,11 +473,13 @@ std::optional<FormResult> run_task_form(
             .header = header.get(),
             .modified_marker = "[*] ",     // flag changed fields in their title
         };
-        // `r` (navigation mode only) ends this run to open the recurrence
-        // wizard (tasks only); the loop then reopens the form with the refreshed
-        // Repeat summary. sparcli suppresses the bare-letter shortcut while a
-        // field is being edited, so typing "r" in the Title stays literal.
+        // Navigation-mode shortcuts (sparcli suppresses these bare-letter
+        // chords while a field is being edited, so typing "s"/"r" in the Title
+        // stays literal): `s` saves the form like Ctrl-D, and `r` (tasks only)
+        // ends this run to open the recurrence wizard; the loop then reopens the
+        // form with the refreshed Repeat summary.
         sparcli::Shortcuts shortcuts;
+        shortcuts.on_return(sparcli::key_char('s'), ACT_SAVE, "save");
         if(!is_note) {
             shortcuts.on_return(
                 sparcli::key_char('r'), ACT_EDIT_RECURRENCE, "repeat"
@@ -583,7 +586,8 @@ std::optional<FormResult> run_task_form(
 
         const bool submitted = form.run();
         // A RETURN shortcut also ends run() with SC_INPUT_OK, so check which
-        // chord fired before treating a non-cancel exit as a submit.
+        // chord fired before treating a non-cancel exit as a submit: `r` opens
+        // the wizard, while `s` (ACT_SAVE) falls through to the submit path.
         const int fired = shortcuts.fired();
         dirty = dirty || form.modified();   // accumulate across rebuilds
 
@@ -614,7 +618,7 @@ std::optional<FormResult> run_task_form(
             continue;   // rebuild with the refreshed summary
         }
         if(submitted) {
-            break;
+            break;   // Ctrl-D, or the `s` save shortcut
         }
         // Esc: discard a pristine form silently; otherwise ask (default save).
         if(!dirty) {
