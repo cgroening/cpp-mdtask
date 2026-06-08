@@ -143,8 +143,9 @@ make SPARCLI_CFLAGS=-I/path/to/sparcli/include \
 
 Optional TOML at `$XDG_CONFIG_HOME/mdtask/config.toml`; see
 [`examples/config.toml`](examples/config.toml). Keys: `tasks_dir`,
-`archive_dir`, `date_format` (`dmy`/`iso`), `editor`, `log_level`. Any key can
-be overridden by an `MDTASK_`-prefixed environment variable, e.g.
+`archive_dir`, `date_format` (`dmy`/`iso`), `language` (`english`/`german`, for
+the weekday names in section headers), `editor`, `log_level`. Any key can be
+overridden by an `MDTASK_`-prefixed environment variable, e.g.
 `MDTASK_TASKS_DIR`.
 
 Try it with the bundled sample tasks:

@@ -63,8 +63,34 @@ void run_task_presentation_tests() {
         cancelled.status = Status::CANCELLED;
         section.tasks = {open, progress, done, cancelled};
 
-        const std::string header =
-            presentation::section_header(section, today, DateFormat::DMY);
+        const std::string header = presentation::section_header(
+            section, today, DateFormat::DMY, Language::ENGLISH
+        );
         CHECK(header == "Inbox (open: 2; done: 2)");
+    }
+
+    // A dated section prefixes the weekday before the date, localized and with
+    // the Today/Tomorrow label kept.
+    {
+        AgendaSection today_section;
+        today_section.kind = SectionKind::DATED;
+        today_section.day = today;   // 2026-06-08 is a Monday
+        Task task;
+        today_section.tasks = {task};
+
+        CHECK(presentation::section_header(
+                  today_section, today, DateFormat::DMY, Language::ENGLISH
+              ) == "Today - Monday, 08.06.2026 (open: 1; done: 0)");
+        CHECK(presentation::section_header(
+                  today_section, today, DateFormat::DMY, Language::GERMAN
+              ) == "Today - Montag, 08.06.2026 (open: 1; done: 0)");
+
+        AgendaSection later;
+        later.kind = SectionKind::DATED;
+        later.day = ymd(2026, 6, 10);   // a Wednesday
+        later.tasks = {task};
+        CHECK(presentation::section_header(
+                  later, today, DateFormat::ISO, Language::GERMAN
+              ) == "Mittwoch, 2026-06-10 (open: 1; done: 0)");
     }
 }

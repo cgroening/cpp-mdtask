@@ -43,11 +43,35 @@ std::string format_completed(
 
 namespace {
 
+/** Full weekday name in the given language (Monday-first via iso_encoding). */
+std::string weekday_name(std::chrono::year_month_day day, Language language) {
+    static constexpr const char* ENGLISH[] = {
+        "Monday", "Tuesday", "Wednesday", "Thursday",
+        "Friday", "Saturday", "Sunday",
+    };
+    static constexpr const char* GERMAN[] = {
+        "Montag", "Dienstag", "Mittwoch", "Donnerstag",
+        "Freitag", "Samstag", "Sonntag",
+    };
+    const unsigned iso =
+        std::chrono::weekday{std::chrono::sys_days{day}}.iso_encoding();
+    const unsigned index = iso - 1;   // 1..7 (Mon..Sun) -> 0..6
+    return language == Language::GERMAN ? GERMAN[index] : ENGLISH[index];
+}
+
+/** A date with its weekday prefixed, e.g. "Monday, 08.06.2026". */
+std::string weekday_date(
+    std::chrono::year_month_day day, DateFormat format, Language language
+) {
+    return weekday_name(day, language) + ", " + format_date(day, format);
+}
+
 /** Base label for a section, without the open/done count suffix. */
 std::string section_label(
     const AgendaSection& section,
     std::chrono::year_month_day today,
-    DateFormat format
+    DateFormat format,
+    Language language
 ) {
     switch(section.kind) {
         case SectionKind::OVERDUE:          return "OVERDUE";
@@ -60,14 +84,14 @@ std::string section_label(
     }
 
     const auto day = section.day.value_or(today);
-    const std::string date = format_date(day, format);
+    const std::string labelled = weekday_date(day, format, language);
     if(day == today) {
-        return "Today - " + date;
+        return "Today - " + labelled;
     }
     if(day == shift_days(today, 1)) {
-        return "Tomorrow - " + date;
+        return "Tomorrow - " + labelled;
     }
-    return date;
+    return labelled;
 }
 
 }  // namespace
@@ -75,12 +99,14 @@ std::string section_label(
 std::string section_header(
     const AgendaSection& section,
     std::chrono::year_month_day today,
-    DateFormat format
+    DateFormat format,
+    Language language
 ) {
     const SectionCounts counts = count_section(section);
     return std::format(
         "{} (open: {}; done: {})",
-        section_label(section, today, format), counts.open, counts.done
+        section_label(section, today, format, language), counts.open,
+        counts.done
     );
 }
 

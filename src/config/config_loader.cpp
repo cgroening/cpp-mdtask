@@ -28,6 +28,12 @@ const std::map<std::string, DateFormat, std::less<>> DATE_FORMATS = {
     {"iso", DateFormat::ISO},
 };
 
+/** Maps the textual languages accepted in the config file. */
+const std::map<std::string, Language, std::less<>> LANGUAGES = {
+    {"english", Language::ENGLISH},
+    {"german",  Language::GERMAN},
+};
+
 /** Default tasks directory: `$XDG_DATA_HOME/mdtask/tasks` (or `./tasks`). */
 std::string default_tasks_dir() {
     if(const auto dir = sparcli::paths::dir(SC_PATH_DATA, APP_NAME)) {
@@ -55,6 +61,7 @@ Result<sparcli::Config> build_layered_config() {
 
     defaults.set("log_level", sparcli::serde::Value::string("warn"));
     defaults.set("date_format", sparcli::serde::Value::string("dmy"));
+    defaults.set("language", sparcli::serde::Value::string("english"));
 
     sparcli::Config config;
     config.set_defaults(defaults);
@@ -104,6 +111,16 @@ Result<Config> load_config() {
         ));
     }
 
+    const std::string language_name =
+        layered->get_string("language", "english");
+    const auto language = LANGUAGES.find(language_name);
+    if(language == LANGUAGES.end()) {
+        return std::unexpected(config_error(
+            "Invalid language '" + language_name + "' in config",
+            "Valid languages: english, german"
+        ));
+    }
+
     const std::filesystem::path tasks_dir = layered->get_string("tasks_dir");
     // The archive defaults to a subfolder of the resolved tasks directory, so
     // a custom tasks_dir keeps its archive alongside it unless overridden.
@@ -131,6 +148,7 @@ Result<Config> load_config() {
         .notes_archive_dir  = notes_archive_dir,
         .log_file           = layered->get_string("log_file"),
         .date_format        = format->second,
+        .language           = language->second,
         .editor             = layered->get_string("editor"),
     };
 }

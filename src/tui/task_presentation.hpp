@@ -29,12 +29,14 @@ namespace mdtask::presentation {
 
 /**
  * Builds the display header for an agenda section, e.g. "OVERDUE", "Inbox",
- * "Today - 05.06.2026", "Tomorrow - 06.06.2026" or a bare formatted date.
+ * "Today - Monday, 05.06.2026", "Tomorrow - Tuesday, 06.06.2026" or a bare
+ * "<Weekday>, <date>". The weekday name follows `language`.
  */
 [[nodiscard]] std::string section_header(
     const AgendaSection& section,
     std::chrono::year_month_day today,
-    DateFormat format
+    DateFormat format,
+    Language language
 );
 
 /**

@@ -59,6 +59,7 @@ void run_config_loader_tests() {
         CHECK(config->log_level == SC_LOG_WARN);
         CHECK(!config->tasks_dir.empty());
         CHECK(config->date_format == DateFormat::DMY);
+        CHECK(config->language == Language::ENGLISH);
         // The archive defaults to a subfolder of the resolved tasks dir.
         CHECK(config->archive_dir == config->tasks_dir / "archive");
     }
@@ -70,6 +71,7 @@ void run_config_loader_tests() {
             "log_level = \"debug\"\n"
             "tasks_dir = \"/tmp/other_tasks\"\n"
             "date_format = \"iso\"\n"
+            "language = \"german\"\n"
             "editor = \"vim\"\n"
         );
         const auto config = load_config();
@@ -78,6 +80,7 @@ void run_config_loader_tests() {
         CHECK(config->tasks_dir == "/tmp/other_tasks");
         CHECK(config->archive_dir == fs::path("/tmp/other_tasks") / "archive");
         CHECK(config->date_format == DateFormat::ISO);
+        CHECK(config->language == Language::GERMAN);
         CHECK(config->editor == "vim");
     }
 
@@ -109,6 +112,15 @@ void run_config_loader_tests() {
         const auto config = load_config();
         CHECK(!config.has_value());
         CHECK(config.error().code == ErrorCode::CONFIG_INVALID);
+    }
+
+    // An invalid language is rejected with a hint.
+    {
+        write_config("language = \"klingon\"\n");
+        const auto config = load_config();
+        CHECK(!config.has_value());
+        CHECK(config.error().code == ErrorCode::CONFIG_INVALID);
+        CHECK(!config.error().hint.empty());
     }
 
     // A malformed file is reported as a config error (fail fast on typos).

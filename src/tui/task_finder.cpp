@@ -188,10 +188,9 @@ void add_row(
                     presentation::relative_due_style(*task.due, today);
             }
 
-            // A trailing ↻ marks a recurring task in the agenda; appended so it
-            // does not interfere with title search (which matches from the left).
+            // A leading ↻ marks a recurring task in the agenda.
             const std::string title_text = task.recurrence
-                ? task.title + " \xe2\x86\xbb"   // ↻
+                ? "\xe2\x86\xbb " + task.title   // ↻
                 : task.title;
 
             fields = {
@@ -250,6 +249,7 @@ RowIndex populate(
     const std::vector<AgendaSection>& agenda,
     std::chrono::year_month_day today,
     DateFormat format,
+    Language language,
     const Selection& selected
 ) {
     RowIndex rows;
@@ -257,7 +257,7 @@ RowIndex populate(
 
     for(const auto& section : agenda) {
         finder.add_section_styled(
-            presentation::section_header(section, today, format),
+            presentation::section_header(section, today, format, language),
             presentation::section_style(section, today)
         );
         rows.by_index.emplace_back(std::nullopt);
@@ -773,11 +773,14 @@ void run_task_finder(TaskService& service, const Config& config) {
             );
         } else {
             const auto agenda = build_agenda(items, today);
-            rows = populate(finder, agenda, today, config.date_format, selected);
+            rows = populate(
+                finder, agenda, today, config.date_format, config.language,
+                selected
+            );
             for(const auto& section : agenda) {
                 jump_targets.push_back({
                     presentation::section_header(
-                        section, today, config.date_format
+                        section, today, config.date_format, config.language
                     ),
                     row_id(section.tasks.front().id),
                 });

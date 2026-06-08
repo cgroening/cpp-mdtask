@@ -13,6 +13,12 @@ enum class DateFormat {
     ISO,  /**< YYYY-MM-DD */
 };
 
+/** Display language for localized labels (currently the weekday names). */
+enum class Language {
+    ENGLISH,  /**< Monday, Tuesday, ... */
+    GERMAN,   /**< Montag, Dienstag, ... */
+};
+
 /**
  * Application configuration resolved from defaults and the config file.
  *
@@ -40,6 +46,9 @@ struct Config {
 
     /** How dates are shown to the user. */
     DateFormat date_format = DateFormat::DMY;
+
+    /** Language for localized labels such as the weekday names. */
+    Language language = Language::ENGLISH;
 
     /** Editor for the body/description (empty = $EDITOR, then nvim). */
     std::string editor;

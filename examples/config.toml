@@ -16,6 +16,10 @@ tasks_dir = "~/.local/share/mdtask/tasks"
 # File names always use ISO regardless of this setting.
 date_format = "dmy"
 
+# Language for localized labels (the weekday names in the agenda section
+# headers, e.g. "Monday" vs "Montag"): "english" or "german".
+language = "english"
+
 # Editor for the multiline description (Ctrl-G in the form). Empty uses
 # $EDITOR, then falls back to nvim.
 editor = "nvim"

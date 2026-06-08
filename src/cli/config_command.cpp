@@ -67,6 +67,10 @@ int ConfigCommand::run(const sparcli::Args& args) {
                                                : "dmy (DD.MM.YYYY)"
     );
     values.add(
+        "Language",
+        config_.language == Language::GERMAN ? "german" : "english"
+    );
+    values.add(
         "Editor",
         config_.editor.empty() ? "(EDITOR, then nvim)" : config_.editor
     );
