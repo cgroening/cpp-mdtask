@@ -697,9 +697,9 @@ void run_task_finder(TaskService& service, const Config& config) {
                                 "select")
                      .on_return(sparcli::key_char('e'), ACT_EDIT_FILE, "edit")
                      .on_return(sparcli::key_char('c'), ACT_DUPLICATE, "copy")
-                     .on_return(sparcli::key_char('r'), ACT_TOGGLE_SUGGEST,
+                     .on_return(sparcli::key_char('w'), ACT_TOGGLE_SUGGEST,
                                 "next")
-                     .on_return(sparcli::key_char('R'), ACT_FOCUS_SUGGEST)
+                     .on_return(sparcli::key_char('W'), ACT_FOCUS_SUGGEST)
                      .on_return(sparcli::key_char('d'), ACT_TOGGLE_DONE, "done")
                      .on_return(sparcli::key_char('p'), ACT_CYCLE_STATUS,
                                 "status")
