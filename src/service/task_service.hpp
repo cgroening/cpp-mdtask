@@ -5,6 +5,7 @@
 #include "storage/task_repository.hpp"
 
 #include <chrono>
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -78,6 +79,21 @@ public:
 
     /** Warnings from the most recent load (files skipped as malformed). */
     [[nodiscard]] std::vector<std::string> load_warnings() const;
+
+    /** Path of the file backing a task/note, or std::nullopt when unknown. */
+    [[nodiscard]] std::optional<std::filesystem::path> file_path(
+        const std::string& id
+    ) const;
+
+    /**
+     * Re-reads a task from disk after an external edit and saves it again so the
+     * file name stays in sync with the (possibly changed) due date and title.
+     *
+     * @param id Id of the edited task.
+     * @return The reloaded, re-saved task, or a NOT_FOUND error when the file
+     *         can no longer be parsed or its id changed (it is then left as is).
+     */
+    [[nodiscard]] Result<Task> reload_task(const std::string& id);
 
     /**
      * Toggles a task between done and open, recording or clearing the

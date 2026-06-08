@@ -17,5 +17,6 @@ int main() {
     run_markdown_document_tests();
     run_markdown_task_repository_tests();
     run_config_loader_tests();
+    run_editor_tests();
     return check::summary("mdtask");
 }

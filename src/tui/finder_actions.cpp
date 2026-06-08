@@ -16,7 +16,8 @@ std::vector<HelpItem> help_entries() {
         row("s", "jump to a section"),
         row("1 / 2 / 3 / 4 / 5",
             "switch view (Tasks / Recurring / Notes / Archive / Search)"),
-        row("Enter", "edit the item"),
+        row("Enter", "edit the item in a form"),
+        row("e", "open the whole .md file in $EDITOR"),
         row("q or Esc", "quit"),
 
         section("Actions (Tasks / Notes)"),

@@ -44,6 +44,7 @@ enum FinderAction {
     ACT_VIEW_NOTES     = 25,
     ACT_VIEW_ARCHIVE   = 26,
     ACT_VIEW_SEARCH    = 27,
+    ACT_EDIT_FILE      = 28,
 };
 
 /** One line of the keyboard-shortcut help: a section header or a key/action. */

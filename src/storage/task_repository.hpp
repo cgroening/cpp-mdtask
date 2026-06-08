@@ -2,6 +2,7 @@
 
 #include "domain/task.hpp"
 
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -59,6 +60,17 @@ public:
      * @return Human-readable warning lines; empty when the last load was clean.
      */
     [[nodiscard]] virtual std::vector<std::string> load_warnings() const = 0;
+
+    /**
+     * Returns the path of the file backing an active task or note.
+     *
+     * @param id Id of the task/note to locate.
+     * @return The `.md` file path, or std::nullopt when the id is unknown or
+     *         the backend is not file-based.
+     */
+    [[nodiscard]] virtual std::optional<std::filesystem::path> file_path(
+        const std::string& id
+    ) const = 0;
 
     /**
      * Persists a new task.

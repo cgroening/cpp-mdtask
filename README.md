@@ -61,6 +61,8 @@ Modal (vim-style): the finder starts in normal mode.
 - `1` / `2` / `3` / `4` / `5` – switch view: Tasks / Recurring / Notes /
   Archive / Search (Recurring and Search are placeholders for now).
 - `Enter` – edit the task in a form (Ctrl-G opens the description in `$EDITOR`).
+- `e` – open the whole `.md` file in `$EDITOR` (or the configured `editor`); the
+  file is reloaded and renamed afterwards if its due date or title changed.
 - `d` – toggle done (greyed in place, kept until archived).
 - `p` – cycle status (open → in progress → paused → cancelled).
 - `r` – toggle a "Next: …" banner recommending the most urgent task (by due

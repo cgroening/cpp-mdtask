@@ -43,6 +43,9 @@ public:
         const std::string& id
     ) const override;
     [[nodiscard]] std::vector<std::string> load_warnings() const override;
+    [[nodiscard]] std::optional<std::filesystem::path> file_path(
+        const std::string& id
+    ) const override;
     void save(const Task& task) override;
     void update(const Task& task) override;
     void archive(const Task& task) override;

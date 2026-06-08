@@ -159,6 +159,24 @@ std::vector<std::string> TaskService::load_warnings() const {
     return repository_.load_warnings();
 }
 
+std::optional<std::filesystem::path> TaskService::file_path(
+    const std::string& id
+) const {
+    return repository_.file_path(id);
+}
+
+Result<Task> TaskService::reload_task(const std::string& id) {
+    // find_by_id reads fresh from disk and skips malformed files, so a broken
+    // edit (or a removed id) surfaces here as NOT_FOUND and is left untouched.
+    auto task = repository_.find_by_id(id);
+    if(!task) {
+        return std::unexpected(task_not_found_error(id));
+    }
+    // Re-save through the normal path so a changed due date or title renames the
+    // file to keep the <due>--<slug>.md invariant.
+    return update_task(std::move(*task));
+}
+
 std::vector<Task> TaskService::open_tasks() const {
     auto tasks = repository_.find_all();
     const auto removed = std::ranges::remove_if(tasks, [](const Task& task) {

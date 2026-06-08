@@ -11,3 +11,4 @@ void run_service_tests();
 void run_markdown_document_tests();
 void run_markdown_task_repository_tests();
 void run_config_loader_tests();
+void run_editor_tests();

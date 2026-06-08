@@ -1,4 +1,5 @@
 #include "domain/task.hpp"
+#include "service/task_service.hpp"
 #include "storage/markdown_task_repository.hpp"
 
 #include "check.hpp"
@@ -258,6 +259,38 @@ void run_markdown_task_repository_tests() {
         const std::string warning = repository.load_warnings()[0];
         CHECK(warning.find("2026-01-01--broken.md") != std::string::npos);
         CHECK(warning.find("line ") != std::string::npos);
+    }
+
+    // file_path locates the backing file; reload_task re-reads an externally
+    // edited file and renames it when its due date changed.
+    {
+        const fs::path edit_dir = dir / "edit-tasks";
+        fs::remove_all(edit_dir, ec);
+        MarkdownTaskRepository repository(
+            edit_dir, notes_dir, archive_dir, notes_archive_dir
+        );
+        TaskService service(repository);
+        repository.save(sample_task());   // due 2026-06-05
+
+        const auto path = repository.file_path("id000000");
+        CHECK(path.has_value());
+        CHECK(path->filename() == "2026-06-05--pay-the-invoice.md");
+
+        // Simulate an external edit that moves the due date to 2026-06-10.
+        std::ofstream(*path, std::ios::trunc)
+            << "---\nid: id000000\ntitle: Pay the invoice\n"
+               "due: 2026-06-10\npriority: high\ncreated: 2026-06-01\n"
+               "---\n\n# Pay the invoice\n\nRechnung 4711\n";
+
+        const auto reloaded = service.reload_task("id000000");
+        CHECK(reloaded.has_value());
+        CHECK(reloaded->due == ymd(2026, 6, 10));
+        CHECK(any_file_named(edit_dir, "2026-06-10--pay-the-invoice.md"));
+        CHECK(!any_file_named(edit_dir, "2026-06-05--pay-the-invoice.md"));
+
+        // An unknown id cannot be reloaded.
+        const auto missing = service.reload_task("nope");
+        CHECK(!missing.has_value());
     }
 
     fs::remove_all(dir, ec);

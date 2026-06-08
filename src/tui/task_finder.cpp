@@ -643,6 +643,7 @@ void run_task_finder(TaskService& service, const Config& config) {
         } else if(view == View::NOTES) {
             shortcuts.on_return(sparcli::key_char(' '), ACT_TOGGLE_SELECT,
                                 "select")
+                     .on_return(sparcli::key_char('e'), ACT_EDIT_FILE, "edit")
                      .on_return(sparcli::key_char('n'), ACT_NEW, "new")
                      .on_return(sparcli::key_char('N'), ACT_NEW_OTHER,
                                 "new task")
@@ -654,6 +655,7 @@ void run_task_finder(TaskService& service, const Config& config) {
         } else if(view == View::TASKS) {
             shortcuts.on_return(sparcli::key_char(' '), ACT_TOGGLE_SELECT,
                                 "select")
+                     .on_return(sparcli::key_char('e'), ACT_EDIT_FILE, "edit")
                      .on_return(sparcli::key_char('r'), ACT_TOGGLE_SUGGEST,
                                 "next")
                      .on_return(sparcli::key_char('R'), ACT_FOCUS_SUGGEST)
@@ -831,6 +833,38 @@ void run_task_finder(TaskService& service, const Config& config) {
         if(action == ACT_TOGGLE_SELECT) {
             if(!selected.erase(task.id)) {
                 selected.insert(task.id);
+            }
+            continue;
+        }
+
+        // Open the whole .md file in $EDITOR. edit_file must not run inside an
+        // alt-screen session, so we leave and re-enter it around the call; then
+        // reload + re-save so a changed due/title renames the file.
+        if(action == ACT_EDIT_FILE) {
+            const auto path = service.file_path(task.id);
+            if(!path) {
+                sparcli::alert::warning("Could not locate the task's file.");
+                continue;
+            }
+            sc_altscreen_end();
+            const int rc = config.editor.empty()
+                ? sparcli::edit_file(path->string())
+                : sparcli::edit_file(config.editor, path->string());
+            sc_altscreen_begin();
+            if(rc != 0) {
+                sparcli::alert::warning(
+                    "Could not open the editor (no terminal or editor not "
+                    "found)."
+                );
+                continue;
+            }
+            if(const auto reloaded = service.reload_task(task.id)) {
+                focus = row_id(reloaded->id);
+            } else {
+                sparcli::alert::warning(
+                    "Edited file could not be reloaded (invalid front matter?) "
+                    "- left unchanged."
+                );
             }
             continue;
         }

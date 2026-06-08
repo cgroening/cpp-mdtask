@@ -2,6 +2,7 @@
 
 #include "storage/task_repository.hpp"
 
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -27,6 +28,12 @@ public:
     /** Always empty: an in-memory store never fails to parse a file. */
     [[nodiscard]] std::vector<std::string> load_warnings() const override {
         return {};
+    }
+    /** No backing files: there is no path to return. */
+    [[nodiscard]] std::optional<std::filesystem::path> file_path(
+        const std::string& /*id*/
+    ) const override {
+        return std::nullopt;
     }
     void save(const Task& task) override;
     void update(const Task& task) override;

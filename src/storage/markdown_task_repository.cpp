@@ -404,6 +404,15 @@ std::optional<Task> MarkdownTaskRepository::find_by_id(
     return std::nullopt;
 }
 
+std::optional<fs::path> MarkdownTaskRepository::file_path(
+    const std::string& id
+) const {
+    if(auto path = find_path_by_id(list_markdown_files(tasks_dir_), id)) {
+        return path;
+    }
+    return find_path_by_id(list_markdown_files(notes_dir_), id);
+}
+
 void MarkdownTaskRepository::save(const Task& task) {
     update(task);
 }
