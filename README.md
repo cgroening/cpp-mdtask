@@ -67,7 +67,7 @@ repeat_from: due      # due (default) or completion
 A recurring task is marked with a leading `↻` in the agenda. The **Recurring**
 view (`2`) lists each series' upcoming occurrences for the current and next week
 (at least the next one). In the task form, the **Repeat** field shows the current
-rule; press **Ctrl-R** to open a small wizard that asks only what applies (a
+rule; press **r** to open a small wizard that asks only what applies (a
 count for days/weeks/months/years, *or* a set of weekdays, then the basis).
 Choose `none` to end the series. Editing the task's `.md` file (`e`) works too.
 

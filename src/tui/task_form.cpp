@@ -391,12 +391,14 @@ std::optional<FormResult> run_task_form(
             .header = header.get(),
             .modified_marker = "[*] ",     // flag changed fields in their title
         };
-        // Ctrl-R ends this run to open the recurrence wizard (tasks only); the
-        // loop then reopens the form with the refreshed Repeat summary.
+        // `r` (navigation mode only) ends this run to open the recurrence
+        // wizard (tasks only); the loop then reopens the form with the refreshed
+        // Repeat summary. sparcli suppresses the bare-letter shortcut while a
+        // field is being edited, so typing "r" in the Title stays literal.
         sparcli::Shortcuts shortcuts;
         if(!is_note) {
             shortcuts.on_return(
-                sparcli::key_ctrl('r'), ACT_EDIT_RECURRENCE, "repeat"
+                sparcli::key_char('r'), ACT_EDIT_RECURRENCE, "repeat"
             );
         }
         shortcuts.apply(opts);
@@ -452,7 +454,7 @@ std::optional<FormResult> run_task_form(
         const int note_id = form.add_bool("Note", state.note, note_opts);
 
         // A single, display-only Repeat summary (task only): read-only and not
-        // selectable, so the cursor skips it and the wizard (Ctrl-R) is the only
+        // selectable, so the cursor skips it and the wizard (`r`) is the only
         // way to change it.
         if(!is_note) {
             std::string repeat_summary = "none";
@@ -466,7 +468,7 @@ std::optional<FormResult> run_task_form(
             static_cast<void>(form.add_text(
                 "Repeat", repeat_summary,
                 {.width_mode = SC_FWIDTH_AUTO, .col_span = wide_span,
-                 .help = "Ctrl-R to edit recurrence",
+                 .help = "press r to edit recurrence",
                  .read_only = true, .not_selectable = true}
             ));
         }
