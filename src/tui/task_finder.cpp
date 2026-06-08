@@ -28,10 +28,16 @@ namespace {
 enum class Layout { TASKS, NOTES, ARCHIVE };
 
 // Per-layout column headers (✎ = note marker, ◌ = status, ☑ = subtasks,
-// → = relative due). The TASKS view leads with the status glyph.
+// → = relative due). The TASKS view leads with the status glyph. The *_SEL
+// variants prepend an empty-header marker column, shown only while a multi-
+// selection is active.
 constexpr const char* TASK_HEADERS[]   = {"\xe2\x97\x8c", "!", "\xe2\x98\x91",
                                           "Task", "Due/Done", "\xe2\x86\x92"};
+constexpr const char* TASK_HEADERS_SEL[] = {"", "\xe2\x97\x8c", "!",
+                                            "\xe2\x98\x91", "Task", "Due/Done",
+                                            "\xe2\x86\x92"};
 constexpr const char* NOTE_HEADERS[]   = {"Task"};
+constexpr const char* NOTE_HEADERS_SEL[] = {"", "Task"};
 constexpr const char* ARCHIVE_HEADERS[] = {"\xe2\x9c\x8e", "!", "\xe2\x97\x8c",
                                            "Task", "Due/Done"};
 
@@ -42,13 +48,16 @@ struct ColumnSpec {
     int task_col;
 };
 
-ColumnSpec column_spec(Layout layout) {
+ColumnSpec column_spec(Layout layout, bool has_selection) {
     switch(layout) {
-        case Layout::NOTES:   return {NOTE_HEADERS, 1, 0};
+        case Layout::NOTES:
+            return has_selection ? ColumnSpec{NOTE_HEADERS_SEL, 2, 1}
+                                 : ColumnSpec{NOTE_HEADERS, 1, 0};
         case Layout::ARCHIVE: return {ARCHIVE_HEADERS, 5, 3};
         case Layout::TASKS:   break;
     }
-    return {TASK_HEADERS, 6, 3};
+    return has_selection ? ColumnSpec{TASK_HEADERS_SEL, 7, 4}
+                         : ColumnSpec{TASK_HEADERS, 6, 3};
 }
 
 /** Builds an Alt(+Shift)+named-key chord for the reorder shortcuts. */
@@ -191,11 +200,15 @@ void add_row(
             break;
         }
     }
-    // A row the user marked with Space is tinted across every cell.
-    if(selected.contains(task.id)) {
-        for(auto& cell_style : styles) {
-            cell_style.bg = sparcli::palette::purple_dark();
-        }
+    // While a multi-selection is active, every row gets a leading marker cell
+    // (a glyph for the marked rows). The column itself is added in column_spec,
+    // so all rows must carry the cell to match the column count.
+    if(!selected.empty()) {
+        fields.insert(
+            fields.begin(),
+            presentation::selection_symbol(selected.contains(task.id))
+        );
+        styles.insert(styles.begin(), presentation::selection_style());
     }
     finder.add_row_styled(fields, styles);
 
@@ -647,7 +660,8 @@ void run_task_finder(TaskService& service, const Config& config) {
         // The header is borrowed by run(), so it must outlive the finder.
         const sparcli::Rendered header = build_tabbar(active_tab, skipped);
 
-        sparcli::FuzzyOpts opts = make_opts(column_spec(layout));
+        sparcli::FuzzyOpts opts =
+            make_opts(column_spec(layout, !selected.empty()));
         opts.header = header.get();
         opts.empty_text = layout == Layout::ARCHIVE ? "No archived items"
             : layout == Layout::NOTES ? "No notes - press n to add one"

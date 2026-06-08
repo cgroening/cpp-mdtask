@@ -180,6 +180,14 @@ sparcli::TextStyle note_style() {
     return sparcli::style(SC_TEXT_ATTR_NONE, sparcli::palette::cyan());
 }
 
+std::string selection_symbol(bool marked) {
+    return marked ? "\xe2\x96\xb8" : " ";   // ▸
+}
+
+sparcli::TextStyle selection_style() {
+    return sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::yellow());
+}
+
 std::string status_label(Status status) {
     switch(status) {
         case Status::IN_PROGRESS: return "In progress";

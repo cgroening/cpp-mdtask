@@ -67,6 +67,12 @@ namespace mdtask::presentation {
 /** Color/attributes for the note marker cell. */
 [[nodiscard]] sparcli::TextStyle note_style();
 
+/** Marker glyph for a multi-selected row ("▸"), blank when not marked. */
+[[nodiscard]] std::string selection_symbol(bool marked);
+
+/** Color/attributes for the selection marker cell (bold, accent yellow). */
+[[nodiscard]] sparcli::TextStyle selection_style();
+
 /** Symbol + text for the form's status select (e.g. "◐ In progress"). */
 [[nodiscard]] std::string status_choice(Status status);
 

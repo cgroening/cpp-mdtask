@@ -35,6 +35,12 @@ void run_task_presentation_tests() {
               == "-2");
     }
 
+    // The selection marker is a glyph when marked, blank otherwise.
+    {
+        CHECK(presentation::selection_symbol(true) == "\xe2\x96\xb8");   // ▸
+        CHECK(presentation::selection_symbol(false) == " ");
+    }
+
     // The section header carries the open/done suffix (cancelled counts done).
     {
         AgendaSection section;
