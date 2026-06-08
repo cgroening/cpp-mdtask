@@ -378,50 +378,59 @@ DueChoice run_due_picker(std::optional<std::chrono::year_month_day> current) {
     return {.changed = true, .due = day};
 }
 
-/** Shows the keyboard-shortcut reference in a yellow panel (dismiss with Enter). */
+/** Shows the keyboard-shortcut reference as a scrollable, read-only list. */
 void run_help() {
-    static constexpr const char* HELP =
-        "Navigation\n"
-        "  up/down or j/k   move cursor\n"
-        "  i                filter (type to search); Esc back to normal\n"
-        "  s                jump to a section\n"
-        "  v                switch Tasks / Notes\n"
-        "  b                show / hide the Archive\n"
-        "  Enter            edit the item\n"
-        "  q or Esc         quit\n"
-        "\n"
-        "Actions (Tasks / Notes)\n"
-        "  d                toggle done\n"
-        "  p                cycle status (open / in progress / paused / "
-        "cancelled)\n"
-        "  t                pick a due date (calendar)\n"
-        "  + / -            shift the due date by one day\n"
-        "  a                archive\n"
-        "  Delete           delete permanently\n"
-        "  n / N            new item / new opposite type\n"
-        "  Alt+up/down      reorder   (Alt+Shift = to top / bottom)\n"
-        "\n"
-        "Multi-select\n"
-        "  Space            mark / unmark the item\n"
-        "  d p a t + - Del  apply to every marked item\n"
-        "\n"
-        "Archive\n"
-        "  r                restore the item\n"
-        "\n"
-        "  ?                this help";
+    static const char* const HELP_HEADERS[] = {"Key", "Action"};
 
-    sparcli::Select dialog(sparcli::SelectOpts{
-        .prompt = HELP,
-        .accent = sparcli::palette::yellow(),
-        .box = {
-            .enabled = true,
-            .border = {.type = SC_BORDER_ROUNDED,
-                       .color = sparcli::palette::yellow()},
-            .width_mode = SC_WIDTH_FULL,
-        },
-    });
-    dialog.add("OK");
-    static_cast<void>(dialog.run_one());
+    sparcli::FuzzyOpts opts{};
+    opts.prompt = "Filter shortcuts";
+    opts.table = true;
+    opts.headers = HELP_HEADERS;
+    opts.n_cols = 2;
+    opts.search_columns = (std::uint64_t{1} << 0) | (std::uint64_t{1} << 1);
+    opts.stretch_columns = std::uint64_t{1} << 1;   // the Action column fills
+    opts.order = SC_FUZZY_ORDER_INSERTION;
+    opts.section_counts = false;
+    opts.modal = true;
+    opts.fullscreen = true;
+    opts.valign = SC_VALIGN_TOP;
+    opts.hide_summary = true;
+    opts.empty_text = "";
+    opts.box = sparcli::BoxStyle{
+        .enabled = true,
+        .border = {.type = SC_BORDER_ROUNDED,
+                   .color = sparcli::palette::yellow()},
+        .padding = {.right = 1, .left = 1},
+        .width_mode = SC_WIDTH_FULL,
+    };
+    opts.table_opts.border.outer_color = sparcli::rgb(180, 180, 180);
+    opts.table_opts.border.inner_color = sparcli::rgb(180, 180, 180);
+
+    // The header is borrowed by run(), so it must outlive the finder.
+    sparcli::Text title;
+    title.append(
+        "Keyboard shortcuts",
+        sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::yellow())
+    );
+    title.append("    Esc to close", sparcli::style(SC_TEXT_ATTR_DIM));
+    const sparcli::Rendered header = presentation::app_header(title);
+    opts.header = header.get();
+
+    sparcli::Fuzzy finder(opts);
+    const sparcli::TextStyle section_style =
+        sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::yellow());
+    const sparcli::TextStyle key_style =
+        sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::cyan());
+    for(const auto& item : help_entries()) {
+        if(!item.section.empty()) {
+            finder.add_section_styled(item.section, section_style);
+        } else {
+            finder.add_row_styled(
+                {item.key, item.desc}, {key_style, sparcli::TextStyle{}}
+            );
+        }
+    }
+    static_cast<void>(finder.run());   // Esc or Enter closes the help
 }
 
 /** Shows the list of skipped (malformed/unreadable) files in a yellow panel. */
