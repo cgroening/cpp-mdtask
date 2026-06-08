@@ -49,11 +49,17 @@ enum FinderAction {
 };
 
 /**
- * Next status in the manual cycle: open -> in progress -> paused -> cancelled
- * -> open. Done is set with `d`, not via this cycle; cycling a done task
- * reopens it.
+ * Progress toggle for `p`: in progress <-> paused. Any other status (open,
+ * done, cancelled) starts at in progress, so a second press then pauses it.
  */
-[[nodiscard]] Status next_status(Status status);
+[[nodiscard]] Status toggle_progress(Status status);
+
+/**
+ * Done/cancelled cycle for `d`: done -> cancelled -> open. Any other status
+ * (open, in progress, paused) jumps to done, so `d` first completes a task and
+ * further presses cycle done -> cancelled -> open.
+ */
+[[nodiscard]] Status cycle_done(Status status);
 
 /**
  * True when `action` applies to every selected task at once (done, status

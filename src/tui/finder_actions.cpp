@@ -2,15 +2,20 @@
 
 namespace mdtask {
 
-Status next_status(Status status) {
+Status toggle_progress(Status status) {
+    return status == Status::IN_PROGRESS ? Status::PAUSED
+                                         : Status::IN_PROGRESS;
+}
+
+Status cycle_done(Status status) {
     switch(status) {
-        case Status::OPEN:        return Status::IN_PROGRESS;
-        case Status::IN_PROGRESS: return Status::PAUSED;
-        case Status::PAUSED:      return Status::CANCELLED;
-        case Status::CANCELLED:   break;
-        case Status::DONE:        break;
+        case Status::DONE:      return Status::CANCELLED;
+        case Status::CANCELLED: return Status::OPEN;
+        case Status::OPEN:      break;
+        case Status::IN_PROGRESS: break;
+        case Status::PAUSED:      break;
     }
-    return Status::OPEN;
+    return Status::DONE;
 }
 
 bool action_is_bulk(int action) {

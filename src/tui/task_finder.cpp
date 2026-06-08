@@ -739,11 +739,11 @@ void run_task_finder(TaskService& service, const Config& config) {
                            D{.help = "jump to the suggested next task",
                              .in_footer = false})
                 .on_return(sparcli::key_char('d'), ACT_TOGGLE_DONE,
-                           D{.footer = "done", .help = "toggle done"})
+                           D{.footer = "done",
+                             .help = "cycle done / cancelled / open"})
                 .on_return(sparcli::key_char('p'), ACT_CYCLE_STATUS,
-                           D{.footer = "status",
-                             .help = "cycle status (open / in progress / "
-                                     "paused / cancelled)"})
+                           D{.footer = "progress",
+                             .help = "toggle in progress / paused"})
                 .on_return(sparcli::key_char('t'), ACT_PICK_DATE,
                            D{.footer = "date",
                              .help = "pick a due date (calendar)"})
@@ -1062,16 +1062,23 @@ void run_task_finder(TaskService& service, const Config& config) {
 
         switch(action) {
             case ACT_TOGGLE_DONE:
-                for(const auto& id : targets) {
-                    report(service.toggle_done(id));
-                }
-                break;
-            case ACT_CYCLE_STATUS:
+                // `d` cycles done -> cancelled -> open (any other status -> done).
                 for(const auto& id : targets) {
                     const auto found = by_id.find(id);
                     if(found != by_id.end()) {
                         report(service.set_status(
-                            id, next_status(found->second->status)
+                            id, cycle_done(found->second->status)
+                        ));
+                    }
+                }
+                break;
+            case ACT_CYCLE_STATUS:
+                // `p` toggles in progress <-> paused.
+                for(const auto& id : targets) {
+                    const auto found = by_id.find(id);
+                    if(found != by_id.end()) {
+                        report(service.set_status(
+                            id, toggle_progress(found->second->status)
                         ));
                     }
                 }

@@ -12,14 +12,22 @@
 using namespace mdtask;
 
 void run_finder_actions_tests() {
-    // The status cycle: open -> in progress -> paused -> cancelled -> open;
-    // done reopens.
+    // `p` toggles in progress <-> paused; any other status starts in progress.
     {
-        CHECK(next_status(Status::OPEN) == Status::IN_PROGRESS);
-        CHECK(next_status(Status::IN_PROGRESS) == Status::PAUSED);
-        CHECK(next_status(Status::PAUSED) == Status::CANCELLED);
-        CHECK(next_status(Status::CANCELLED) == Status::OPEN);
-        CHECK(next_status(Status::DONE) == Status::OPEN);
+        CHECK(toggle_progress(Status::IN_PROGRESS) == Status::PAUSED);
+        CHECK(toggle_progress(Status::PAUSED) == Status::IN_PROGRESS);
+        CHECK(toggle_progress(Status::OPEN) == Status::IN_PROGRESS);
+        CHECK(toggle_progress(Status::DONE) == Status::IN_PROGRESS);
+        CHECK(toggle_progress(Status::CANCELLED) == Status::IN_PROGRESS);
+    }
+
+    // `d` cycles done -> cancelled -> open; any other status jumps to done.
+    {
+        CHECK(cycle_done(Status::OPEN) == Status::DONE);
+        CHECK(cycle_done(Status::DONE) == Status::CANCELLED);
+        CHECK(cycle_done(Status::CANCELLED) == Status::OPEN);
+        CHECK(cycle_done(Status::IN_PROGRESS) == Status::DONE);
+        CHECK(cycle_done(Status::PAUSED) == Status::DONE);
     }
 
     // Which actions fan out across a selection.
