@@ -451,8 +451,9 @@ std::optional<FormResult> run_task_form(
         }
         const int note_id = form.add_bool("Note", state.note, note_opts);
 
-        // A single, display-only Repeat summary (task only); the wizard (Ctrl-R)
-        // is the only way to change it, so its typed value is ignored on submit.
+        // A single, display-only Repeat summary (task only): read-only and not
+        // selectable, so the cursor skips it and the wizard (Ctrl-R) is the only
+        // way to change it.
         if(!is_note) {
             std::string repeat_summary = "none";
             if(state.recurrence) {
@@ -465,7 +466,8 @@ std::optional<FormResult> run_task_form(
             static_cast<void>(form.add_text(
                 "Repeat", repeat_summary,
                 {.width_mode = SC_FWIDTH_AUTO, .col_span = wide_span,
-                 .help = "Ctrl-R to edit recurrence"}
+                 .help = "Ctrl-R to edit recurrence",
+                 .read_only = true, .not_selectable = true}
             ));
         }
 

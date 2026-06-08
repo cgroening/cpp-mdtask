@@ -21,8 +21,8 @@ std::vector<HelpItem> help_entries() {
         row("q or Esc", "quit"),
 
         section("Actions (Tasks / Notes)"),
-        row("r", "toggle the next-task suggestion (Tasks only)"),
-        row("R", "jump to the suggested next task"),
+        row("w", "toggle the next-task suggestion (Tasks only)"),
+        row("W", "jump to the suggested next task"),
         row("d", "toggle done"),
         row("p", "cycle status (open / in progress / paused / cancelled)"),
         row("t", "pick a due date (calendar)"),
