@@ -106,34 +106,4 @@ void run_finder_actions_tests() {
         const auto next = focus_after_delete(rows, 1);
         CHECK(!next.has_value());
     }
-
-    // The help model has section headers and rows for the key shortcuts.
-    {
-        const auto help = help_entries();
-        CHECK(!help.empty());
-
-        bool has_section = false;
-        bool has_help_key = false;
-        bool has_space = false;
-        bool has_date = false;
-        for(const auto& item : help) {
-            if(!item.section.empty()) {
-                has_section = true;
-                continue;
-            }
-            if(item.key == "?" && item.desc.find("help") != std::string::npos) {
-                has_help_key = true;
-            }
-            if(item.key == "Space") {
-                has_space = true;
-            }
-            if(item.key == "t") {
-                has_date = true;
-            }
-        }
-        CHECK(has_section);
-        CHECK(has_help_key);
-        CHECK(has_space);
-        CHECK(has_date);
-    }
 }

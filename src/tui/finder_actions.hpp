@@ -48,22 +48,6 @@ enum FinderAction {
     ACT_DUPLICATE      = 29,
 };
 
-/** One line of the keyboard-shortcut help: a section header or a key/action. */
-struct HelpItem {
-    /** Non-empty marks a section header; `key`/`desc` are then empty. */
-    std::string section;
-    /** The shortcut key(s), e.g. "d" or "Alt+up/down". */
-    std::string key;
-    /** What the shortcut does. */
-    std::string desc;
-};
-
-/**
- * The keyboard-shortcut reference shown by `?`, as ordered data so the help
- * and the actual bindings share a single source.
- */
-[[nodiscard]] std::vector<HelpItem> help_entries();
-
 /**
  * Next status in the manual cycle: open -> in progress -> paused -> cancelled
  * -> open. Done is set with `d`, not via this cycle; cycling a done task

@@ -2,49 +2,6 @@
 
 namespace mdtask {
 
-std::vector<HelpItem> help_entries() {
-    const auto section = [](std::string title) {
-        return HelpItem{.section = std::move(title)};
-    };
-    const auto row = [](std::string key, std::string desc) {
-        return HelpItem{.key = std::move(key), .desc = std::move(desc)};
-    };
-    return {
-        section("Navigation"),
-        row("up/down or j/k", "move cursor"),
-        row("i", "filter (type to search); Esc back to normal"),
-        row("s", "jump to a section"),
-        row("1 / 2 / 3 / 4 / 5",
-            "switch view (Tasks / Recurring / Notes / Archive / Search)"),
-        row("Enter", "edit the item in a form"),
-        row("e", "open the whole .md file in $EDITOR"),
-        row("q or Esc", "quit"),
-
-        section("Actions (Tasks / Notes)"),
-        row("w", "toggle the next-task suggestion (Tasks only)"),
-        row("W", "jump to the suggested next task"),
-        row("d", "toggle done"),
-        row("p", "cycle status (open / in progress / paused / cancelled)"),
-        row("t", "pick a due date (calendar)"),
-        row("+ / -", "shift the due date by one day"),
-        row("a", "archive"),
-        row("c", "duplicate the item (adds a numbered (copy) suffix)"),
-        row("Delete", "delete permanently"),
-        row("n / N", "new item / new opposite type"),
-        row("Alt+up/down", "reorder (Alt+Shift = to top / bottom)"),
-
-        section("Multi-select"),
-        row("Space", "mark / unmark the item"),
-        row("d p a t + - Del", "apply to every marked item"),
-
-        section("Archive"),
-        row("r", "restore the item"),
-
-        section("Other"),
-        row("?", "show this help"),
-    };
-}
-
 Status next_status(Status status) {
     switch(status) {
         case Status::OPEN:        return Status::IN_PROGRESS;

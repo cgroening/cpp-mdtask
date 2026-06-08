@@ -422,61 +422,6 @@ DueChoice run_due_picker(std::optional<std::chrono::year_month_day> current) {
     return {.changed = true, .due = day};
 }
 
-/** Shows the keyboard-shortcut reference as a scrollable, read-only list. */
-void run_help() {
-    static const char* const HELP_HEADERS[] = {"Key", "Action"};
-
-    sparcli::FuzzyOpts opts{};
-    opts.prompt = "Filter shortcuts";
-    opts.table = true;
-    opts.headers = HELP_HEADERS;
-    opts.n_cols = 2;
-    opts.search_columns = (std::uint64_t{1} << 0) | (std::uint64_t{1} << 1);
-    opts.stretch_columns = std::uint64_t{1} << 1;   // the Action column fills
-    opts.order = SC_FUZZY_ORDER_INSERTION;
-    opts.section_counts = false;
-    opts.modal = true;
-    opts.fullscreen = true;
-    opts.valign = SC_VALIGN_TOP;
-    opts.hide_summary = true;
-    opts.empty_text = "";
-    opts.box = sparcli::BoxStyle{
-        .enabled = true,
-        .border = {.type = SC_BORDER_ROUNDED,
-                   .color = sparcli::palette::yellow()},
-        .padding = {.right = 1, .left = 1},
-        .width_mode = SC_WIDTH_FULL,
-    };
-    opts.table_opts.border.outer_color = sparcli::rgb(180, 180, 180);
-    opts.table_opts.border.inner_color = sparcli::rgb(180, 180, 180);
-
-    // The header is borrowed by run(), so it must outlive the finder.
-    sparcli::Text title;
-    title.append(
-        "Keyboard shortcuts",
-        sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::yellow())
-    );
-    title.append("    Esc to close", sparcli::style(SC_TEXT_ATTR_DIM));
-    const sparcli::Rendered header = presentation::app_header(title);
-    opts.header = header.get();
-
-    sparcli::Fuzzy finder(opts);
-    const sparcli::TextStyle section_style =
-        sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::yellow());
-    const sparcli::TextStyle key_style =
-        sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::cyan());
-    for(const auto& item : help_entries()) {
-        if(!item.section.empty()) {
-            finder.add_section_styled(item.section, section_style);
-        } else {
-            finder.add_row_styled(
-                {item.key, item.desc}, {key_style, sparcli::TextStyle{}}
-            );
-        }
-    }
-    static_cast<void>(finder.run());   // Esc or Enter closes the help
-}
-
 /** Shows the list of skipped (malformed/unreadable) files in a yellow panel. */
 void show_load_warnings(const std::vector<std::string>& warnings) {
     constexpr std::size_t MAX_SHOWN = 12;
@@ -657,66 +602,148 @@ void run_task_finder(TaskService& service, const Config& config) {
         const int active_tab = static_cast<int>(view);
 
         // Shortcuts are rebuilt each iteration so labels match the view; they
-        // must outlive run().
+        // must outlive run(). They are the single source for both the footer
+        // hints and the `?` help screen (sparcli::show_shortcuts), so each
+        // carries a footer text and/or a longer help text plus a section. The
+        // declaration order here is the order shown in both places.
+        using D = sparcli::ShortcutDisplay;
         sparcli::Shortcuts shortcuts;
-        shortcuts.on_return(sparcli::key_char('1'), ACT_VIEW_TASKS, "tasks")
-                 .on_return(sparcli::key_char('2'), ACT_VIEW_RECURRING,
-                            "recurring")
-                 .on_return(sparcli::key_char('3'), ACT_VIEW_NOTES, "notes")
-                 .on_return(sparcli::key_char('4'), ACT_VIEW_ARCHIVE, "archive")
-                 .on_return(sparcli::key_char('5'), ACT_VIEW_SEARCH, "search")
-                 .on_return(sparcli::key_special(SC_KEY_DELETE), ACT_DELETE,
-                            "delete")
-                 .on_return(sparcli::key_special(SC_KEY_BACKSPACE), ACT_DELETE)
-                 .on_return(sparcli::key_char('?'), ACT_HELP, "help")
-                 .on_return(sparcli::key_char('q'), ACT_QUIT, "quit");
+
+        // Navigation: the built-in finder keys (help only) and the view
+        // switches. The tab bar already shows the views, so 1-5 stay out of the
+        // footer (in_footer = false) but remain documented in the help screen.
+        const auto add_navigation = [&] {
+            shortcuts.section("Navigation")
+                .help_row("\xe2\x86\x91/\xe2\x86\x93 or j/k", "move cursor")
+                .help_row("i", "filter (type to search); Esc back to normal")
+                .help_row("Enter", "edit / open the item")
+                .on_return(sparcli::key_char('1'), ACT_VIEW_TASKS,
+                           D{.help = "switch to Tasks", .in_footer = false})
+                .on_return(sparcli::key_char('2'), ACT_VIEW_RECURRING,
+                           D{.help = "switch to Recurring", .in_footer = false})
+                .on_return(sparcli::key_char('3'), ACT_VIEW_NOTES,
+                           D{.help = "switch to Notes", .in_footer = false})
+                .on_return(sparcli::key_char('4'), ACT_VIEW_ARCHIVE,
+                           D{.help = "switch to Archive", .in_footer = false})
+                .on_return(sparcli::key_char('5'), ACT_VIEW_SEARCH,
+                           D{.help = "switch to Search", .in_footer = false});
+        };
+
+        // General: present in every view. q and ? show in the footer; the two
+        // delete bindings are documented in the help screen only.
+        const auto add_general = [&] {
+            shortcuts.section("General")
+                .on_return(sparcli::key_char('q'), ACT_QUIT, D{.footer = "quit"})
+                .on_return(sparcli::key_char('?'), ACT_HELP,
+                           D{.footer = "help", .help = "show this help"})
+                .on_return(sparcli::key_special(SC_KEY_DELETE), ACT_DELETE,
+                           D{.footer = "delete", .help = "delete permanently"})
+                .on_return(sparcli::key_special(SC_KEY_BACKSPACE), ACT_DELETE,
+                           D{.help = "delete permanently (same as Del)",
+                             .in_footer = false});
+        };
+
+        add_navigation();
 
         if(view == View::ARCHIVE) {
-            shortcuts.on_return(sparcli::key_char('r'), ACT_RESTORE, "restore")
-                     .on_return(sparcli::key_char('s'), ACT_JUMP, "section");
+            shortcuts.section("Archive")
+                .on_return(sparcli::key_char('r'), ACT_RESTORE,
+                           D{.footer = "restore", .help = "restore the item"})
+                .on_return(sparcli::key_char('s'), ACT_JUMP,
+                           D{.footer = "section", .help = "jump to a section"});
         } else if(view == View::RECURRING) {
             // Projected rows are read-only; edit the underlying series via its
             // file, and jump between the day sections.
-            shortcuts.on_return(sparcli::key_char('e'), ACT_EDIT_FILE, "edit")
-                     .on_return(sparcli::key_char('s'), ACT_JUMP, "section");
+            shortcuts.section("Actions")
+                .on_return(sparcli::key_char('e'), ACT_EDIT_FILE,
+                           D{.footer = "edit",
+                             .help = "open the series .md file in $EDITOR"})
+                .on_return(sparcli::key_char('s'), ACT_JUMP,
+                           D{.footer = "section", .help = "jump to a section"});
         } else if(view == View::NOTES) {
-            shortcuts.on_return(sparcli::key_char(' '), ACT_TOGGLE_SELECT,
-                                "select")
-                     .on_return(sparcli::key_char('e'), ACT_EDIT_FILE, "edit")
-                     .on_return(sparcli::key_char('c'), ACT_DUPLICATE, "copy")
-                     .on_return(sparcli::key_char('n'), ACT_NEW, "new")
-                     .on_return(sparcli::key_char('N'), ACT_NEW_OTHER,
-                                "new task")
-                     .on_return(sparcli::key_char('a'), ACT_ARCHIVE, "archive")
-                     .on_return(alt_key(SC_KEY_UP, false), ACT_MOVE_UP, "move")
-                     .on_return(alt_key(SC_KEY_DOWN, false), ACT_MOVE_DOWN)
-                     .on_return(alt_key(SC_KEY_UP, true), ACT_MOVE_TOP, "to end")
-                     .on_return(alt_key(SC_KEY_DOWN, true), ACT_MOVE_BOTTOM);
+            shortcuts.section("Actions (Notes)")
+                .on_return(sparcli::key_char('e'), ACT_EDIT_FILE,
+                           D{.footer = "edit",
+                             .help = "open the whole .md file in $EDITOR"})
+                .on_return(sparcli::key_char('c'), ACT_DUPLICATE,
+                           D{.footer = "copy",
+                             .help = "duplicate (adds a numbered (copy) suffix)"})
+                .on_return(sparcli::key_char('n'), ACT_NEW,
+                           D{.footer = "new", .help = "new note"})
+                .on_return(sparcli::key_char('N'), ACT_NEW_OTHER,
+                           D{.footer = "new task", .help = "new task instead"})
+                .on_return(sparcli::key_char('a'), ACT_ARCHIVE,
+                           D{.footer = "archive", .help = "archive"})
+                .on_return(alt_key(SC_KEY_UP, false), ACT_MOVE_UP,
+                           D{.footer = "move", .help = "reorder up"})
+                .on_return(alt_key(SC_KEY_DOWN, false), ACT_MOVE_DOWN,
+                           D{.help = "reorder down", .in_footer = false})
+                .on_return(alt_key(SC_KEY_UP, true), ACT_MOVE_TOP,
+                           D{.footer = "to end", .help = "move to top"})
+                .on_return(alt_key(SC_KEY_DOWN, true), ACT_MOVE_BOTTOM,
+                           D{.help = "move to bottom", .in_footer = false});
+            shortcuts.section("Multi-select")
+                .help_row("Space then d / a / Del", "apply to every marked item")
+                .on_return(sparcli::key_char(' '), ACT_TOGGLE_SELECT,
+                           D{.footer = "select",
+                             .help = "mark / unmark the item"});
         } else if(view == View::TASKS) {
-            shortcuts.on_return(sparcli::key_char(' '), ACT_TOGGLE_SELECT,
-                                "select")
-                     .on_return(sparcli::key_char('e'), ACT_EDIT_FILE, "edit")
-                     .on_return(sparcli::key_char('c'), ACT_DUPLICATE, "copy")
-                     .on_return(sparcli::key_char('w'), ACT_TOGGLE_SUGGEST,
-                                "next")
-                     .on_return(sparcli::key_char('W'), ACT_FOCUS_SUGGEST)
-                     .on_return(sparcli::key_char('d'), ACT_TOGGLE_DONE, "done")
-                     .on_return(sparcli::key_char('p'), ACT_CYCLE_STATUS,
-                                "status")
-                     .on_return(sparcli::key_char('t'), ACT_PICK_DATE, "date")
-                     .on_return(sparcli::key_char('+'), ACT_SHIFT_PLUS, "+1d")
-                     .on_return(sparcli::key_char('='), ACT_SHIFT_PLUS)
-                     .on_return(sparcli::key_char('-'), ACT_SHIFT_MINUS, "-1d")
-                     .on_return(sparcli::key_char('a'), ACT_ARCHIVE, "archive")
-                     .on_return(sparcli::key_char('n'), ACT_NEW, "new")
-                     .on_return(sparcli::key_char('N'), ACT_NEW_OTHER,
-                                "new note")
-                     .on_return(sparcli::key_char('s'), ACT_JUMP, "section")
-                     .on_return(alt_key(SC_KEY_UP, false), ACT_MOVE_UP, "move")
-                     .on_return(alt_key(SC_KEY_DOWN, false), ACT_MOVE_DOWN)
-                     .on_return(alt_key(SC_KEY_UP, true), ACT_MOVE_TOP, "to end")
-                     .on_return(alt_key(SC_KEY_DOWN, true), ACT_MOVE_BOTTOM);
+            shortcuts.section("Actions (Tasks)")
+                .on_return(sparcli::key_char('e'), ACT_EDIT_FILE,
+                           D{.footer = "edit",
+                             .help = "open the whole .md file in $EDITOR"})
+                .on_return(sparcli::key_char('c'), ACT_DUPLICATE,
+                           D{.footer = "copy",
+                             .help = "duplicate (adds a numbered (copy) suffix)"})
+                .on_return(sparcli::key_char('w'), ACT_TOGGLE_SUGGEST,
+                           D{.footer = "next",
+                             .help = "toggle the next-task suggestion"})
+                .on_return(sparcli::key_char('W'), ACT_FOCUS_SUGGEST,
+                           D{.help = "jump to the suggested next task",
+                             .in_footer = false})
+                .on_return(sparcli::key_char('d'), ACT_TOGGLE_DONE,
+                           D{.footer = "done", .help = "toggle done"})
+                .on_return(sparcli::key_char('p'), ACT_CYCLE_STATUS,
+                           D{.footer = "status",
+                             .help = "cycle status (open / in progress / "
+                                     "paused / cancelled)"})
+                .on_return(sparcli::key_char('t'), ACT_PICK_DATE,
+                           D{.footer = "date",
+                             .help = "pick a due date (calendar)"})
+                .on_return(sparcli::key_char('+'), ACT_SHIFT_PLUS,
+                           D{.footer = "+1d",
+                             .help = "shift the due date by one day"})
+                .on_return(sparcli::key_char('='), ACT_SHIFT_PLUS,
+                           D{.help = "shift the due date by one day (same as +)",
+                             .in_footer = false})
+                .on_return(sparcli::key_char('-'), ACT_SHIFT_MINUS,
+                           D{.footer = "-1d",
+                             .help = "shift the due date back one day"})
+                .on_return(sparcli::key_char('a'), ACT_ARCHIVE,
+                           D{.footer = "archive", .help = "archive"})
+                .on_return(sparcli::key_char('n'), ACT_NEW,
+                           D{.footer = "new", .help = "new task"})
+                .on_return(sparcli::key_char('N'), ACT_NEW_OTHER,
+                           D{.footer = "new note", .help = "new note instead"})
+                .on_return(sparcli::key_char('s'), ACT_JUMP,
+                           D{.footer = "section", .help = "jump to a section"})
+                .on_return(alt_key(SC_KEY_UP, false), ACT_MOVE_UP,
+                           D{.footer = "move", .help = "reorder up"})
+                .on_return(alt_key(SC_KEY_DOWN, false), ACT_MOVE_DOWN,
+                           D{.help = "reorder down", .in_footer = false})
+                .on_return(alt_key(SC_KEY_UP, true), ACT_MOVE_TOP,
+                           D{.footer = "to end", .help = "move to top"})
+                .on_return(alt_key(SC_KEY_DOWN, true), ACT_MOVE_BOTTOM,
+                           D{.help = "move to bottom", .in_footer = false});
+            shortcuts.section("Multi-select")
+                .help_row("Space then d / p / a / t / + / - / Del",
+                          "apply to every marked item")
+                .on_return(sparcli::key_char(' '), ACT_TOGGLE_SELECT,
+                           D{.footer = "select",
+                             .help = "mark / unmark the item"});
         }
+
+        add_general();
 
         // load_warnings() reflects the load that just produced `items`.
         const std::size_t skipped = service.load_warnings().size();
@@ -804,7 +831,16 @@ void run_task_finder(TaskService& service, const Config& config) {
         }
 
         if(action == ACT_HELP) {
-            run_help();
+            sparcli::show_shortcuts(
+                shortcuts,
+                sparcli::ShortcutHelpOpts{
+                    .title = "mdtask - keyboard shortcuts",
+                    // The agenda finder holds an AltScreen for the whole loop,
+                    // so the help screen must reuse it (and render fullscreen)
+                    // rather than open a nested one.
+                    .in_alt_screen = true,
+                }
+            );
             continue;
         }
 
