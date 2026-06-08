@@ -61,6 +61,9 @@ namespace mdtask::presentation {
 /** Plain status name ("Open", "In progress", "Done"). */
 [[nodiscard]] std::string status_label(Status status);
 
+/** Plain priority name ("high", "medium", "low", "none"). */
+[[nodiscard]] std::string priority_label(Priority priority);
+
 /** Marker glyph for a note ("✎"), or blank for a regular task. */
 [[nodiscard]] std::string note_symbol(const Task& task);
 

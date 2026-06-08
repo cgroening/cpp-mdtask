@@ -35,6 +35,14 @@ void run_task_presentation_tests() {
               == "-2");
     }
 
+    // Priority labels map to their plain names.
+    {
+        CHECK(presentation::priority_label(Priority::HIGH) == "high");
+        CHECK(presentation::priority_label(Priority::MEDIUM) == "medium");
+        CHECK(presentation::priority_label(Priority::LOW) == "low");
+        CHECK(presentation::priority_label(Priority::NONE) == "none");
+    }
+
     // The selection marker is a glyph when marked, blank otherwise.
     {
         CHECK(presentation::selection_symbol(true) == "\xe2\x96\xb8");   // ▸

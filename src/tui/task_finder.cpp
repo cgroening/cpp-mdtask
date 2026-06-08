@@ -2,6 +2,7 @@
 
 #include "domain/agenda.hpp"
 #include "domain/subtasks.hpp"
+#include "domain/suggestion.hpp"
 #include "tui/finder_actions.hpp"
 #include "tui/task_form.hpp"
 #include "tui/task_presentation.hpp"
@@ -476,8 +477,13 @@ void show_load_warnings(const std::vector<std::string>& warnings) {
     static_cast<void>(dialog.run_one());
 }
 
-/** Builds the pinned tab bar "Tasks | Notes | Archive" (active tab 0/1/2). */
-sparcli::Rendered build_tabbar(int active, std::size_t skipped) {
+/**
+ * Builds the pinned tab bar "Tasks | Notes | Archive" (active tab 0/1/2).
+ * When `suggestion` is non-empty it adds a second "Next: ..." banner line.
+ */
+sparcli::Rendered build_tabbar(
+    int active, std::size_t skipped, const std::string& suggestion
+) {
     const char* const names[] = {"Tasks", "Notes", "Archive"};
     const sparcli::TextStyle app_title = sparcli::style(
         SC_TEXT_ATTR_BOLD, sparcli::palette::purple()
@@ -497,6 +503,13 @@ sparcli::Rendered build_tabbar(int active, std::size_t skipped) {
     if(skipped > 0) {
         bar.append(
             std::format("    \xe2\x9a\xa0 {} skipped", skipped),   // ⚠
+            sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::yellow())
+        );
+    }
+    if(!suggestion.empty()) {
+        bar.append("\n", off);
+        bar.append(
+            "\xe2\x98\x85 " + suggestion,   // ★
             sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::yellow())
         );
     }
@@ -581,6 +594,7 @@ void run_task_finder(TaskService& service, const Config& config) {
     enum class View { TASKS, NOTES };
     View list_view = View::TASKS;  // the active non-archive list
     bool show_archive = false;     // overlays the archive on top of the list
+    bool show_suggestion = false;  // banner with the recommended next task
     std::uint64_t focus = 0;       // id to keep the cursor on after a rebuild
     Selection selected;            // task ids marked with Space for bulk actions
 
@@ -626,6 +640,9 @@ void run_task_finder(TaskService& service, const Config& config) {
         } else {
             shortcuts.on_return(sparcli::key_char(' '), ACT_TOGGLE_SELECT,
                                 "select")
+                     .on_return(sparcli::key_char('r'), ACT_TOGGLE_SUGGEST,
+                                "next")
+                     .on_return(sparcli::key_char('R'), ACT_FOCUS_SUGGEST)
                      .on_return(sparcli::key_char('d'), ACT_TOGGLE_DONE, "done")
                      .on_return(sparcli::key_char('p'), ACT_CYCLE_STATUS,
                                 "status")
@@ -657,8 +674,25 @@ void run_task_finder(TaskService& service, const Config& config) {
         // load_warnings() reflects the load that just produced `items`.
         const std::size_t skipped = service.load_warnings().size();
 
+        // The next-task suggestion banner (Tasks view only, while toggled on).
+        std::string suggestion_line;
+        if(layout == Layout::TASKS && show_suggestion) {
+            if(const auto next = suggest_next_task(items)) {
+                const std::string when = next->due
+                    ? presentation::format_relative_due(*next->due, today)
+                    : "no date";
+                suggestion_line = std::format(
+                    "Next: {}  ({}, {})", next->title, when,
+                    presentation::priority_label(next->priority)
+                );
+            } else {
+                suggestion_line = "Next: nothing - all caught up";
+            }
+        }
+
         // The header is borrowed by run(), so it must outlive the finder.
-        const sparcli::Rendered header = build_tabbar(active_tab, skipped);
+        const sparcli::Rendered header =
+            build_tabbar(active_tab, skipped, suggestion_line);
 
         sparcli::FuzzyOpts opts =
             make_opts(column_spec(layout, !selected.empty()));
@@ -746,6 +780,25 @@ void run_task_finder(TaskService& service, const Config& config) {
             show_archive = !show_archive;
             focus = 0;
             selected.clear();   // the archive is not multi-selectable
+            continue;
+        }
+
+        if(action == ACT_TOGGLE_SUGGEST) {
+            show_suggestion = !show_suggestion;
+            // Turning it on jumps the cursor onto the recommended task.
+            if(show_suggestion) {
+                if(const auto next = suggest_next_task(items)) {
+                    focus = row_id(next->id);
+                }
+            }
+            continue;
+        }
+
+        if(action == ACT_FOCUS_SUGGEST) {
+            // Jump straight to the recommended task without the banner toggle.
+            if(const auto next = suggest_next_task(items)) {
+                focus = row_id(next->id);
+            }
             continue;
         }
 

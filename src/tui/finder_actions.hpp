@@ -39,6 +39,8 @@ enum FinderAction {
     ACT_TOGGLE_SELECT  = 18,
     ACT_PICK_DATE      = 19,
     ACT_HELP           = 20,
+    ACT_TOGGLE_SUGGEST = 21,
+    ACT_FOCUS_SUGGEST  = 22,
 };
 
 /** One line of the keyboard-shortcut help: a section header or a key/action. */

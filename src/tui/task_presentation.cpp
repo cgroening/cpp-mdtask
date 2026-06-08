@@ -199,6 +199,16 @@ std::string status_label(Status status) {
     return "Open";
 }
 
+std::string priority_label(Priority priority) {
+    switch(priority) {
+        case Priority::HIGH:   return "high";
+        case Priority::MEDIUM: return "medium";
+        case Priority::LOW:    return "low";
+        case Priority::NONE:   break;
+    }
+    return "none";
+}
+
 std::string status_choice(Status status) {
     // Symbol + text for the form's status select (non-overdue glyphs).
     switch(status) {

@@ -61,6 +61,8 @@ Modal (vim-style): the finder starts in normal mode.
 - `Enter` – edit the task in a form (Ctrl-G opens the description in `$EDITOR`).
 - `d` – toggle done (greyed in place, kept until archived).
 - `p` – cycle status (open → in progress → paused → cancelled).
+- `r` – toggle a "Next: …" banner recommending the most urgent task (by due
+  date, then priority) and jump the cursor to it.
 - `t` – pick a due date from a calendar.
 - `+` / `-` – shift the due date by one day (the cursor stays on the task).
 - `a` – archive the task.
