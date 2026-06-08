@@ -2,7 +2,7 @@
 
 ## v0.2 (next)
 
-- **DoneZilla / project management** and the configurable field schema:
+- **Project management** and the configurable field schema:
   schema-driven, freely configurable fields (key, label, type, dropdown
   options), so the app works for arbitrary project types - not just tasks.
   Field types: text, number, date, bool, select, multiselect, days_to(date),
