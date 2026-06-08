@@ -255,6 +255,23 @@ std::string status_choice(Status status) {
     return "\xe2\x97\x8b Open";   // ○
 }
 
+sparcli::TextStyle status_choice_style(Status status) {
+    // Mirrors status_style() for a non-overdue task (the form has no overdue
+    // notion for the status field itself).
+    switch(status) {
+        case Status::DONE:
+        case Status::CANCELLED:
+            return sparcli::style(SC_TEXT_ATTR_NONE, sparcli::palette::green());
+        case Status::IN_PROGRESS:
+            return sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::yellow());
+        case Status::PAUSED:
+            return sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::blue());
+        case Status::OPEN:
+            break;
+    }
+    return sparcli::style(SC_TEXT_ATTR_DIM);
+}
+
 sparcli::TextStyle title_style(const Task& task) {
     if(is_terminal(task.status)) {
         return sparcli::style(

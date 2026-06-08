@@ -82,6 +82,9 @@ namespace mdtask::presentation {
 /** Symbol + text for the form's status select (e.g. "◐ In progress"). */
 [[nodiscard]] std::string status_choice(Status status);
 
+/** Color for a status select choice (the non-overdue status colors). */
+[[nodiscard]] sparcli::TextStyle status_choice_style(Status status);
+
 /** Style for the title cell (dimmed once the task is done). */
 [[nodiscard]] sparcli::TextStyle title_style(const Task& task);
 

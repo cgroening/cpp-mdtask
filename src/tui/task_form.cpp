@@ -2,6 +2,7 @@
 
 #include "domain/recurrence.hpp"
 #include "tui/task_presentation.hpp"
+#include "util/date.hpp"
 
 #include <sparcli.hpp>
 
@@ -19,7 +20,8 @@ namespace mdtask {
 
 namespace {
 
-// The "●" marker signals a set priority (the level shows in the table color).
+// The "●" marker signals a set priority; per-choice styles (set after the
+// field is added) color each circle to match the agenda.
 const std::vector<std::string> PRIORITY_CHOICES = {
     "none", "\xe2\x97\x8f low", "\xe2\x97\x8f medium", "\xe2\x97\x8f high",
 };
@@ -52,6 +54,27 @@ const std::vector<std::string> STATUS_CHOICES = {
     presentation::status_choice(Status::DONE),
     presentation::status_choice(Status::CANCELLED),
 };
+
+/** Per-choice colors for the priority select (matches PRIORITY_CHOICES order). */
+std::vector<sparcli::TextStyle> priority_choice_styles() {
+    return {
+        presentation::priority_style(Priority::NONE),
+        presentation::priority_style(Priority::LOW),
+        presentation::priority_style(Priority::MEDIUM),
+        presentation::priority_style(Priority::HIGH),
+    };
+}
+
+/** Per-choice colors for the status select (matches STATUS_CHOICES order). */
+std::vector<sparcli::TextStyle> status_choice_styles() {
+    return {
+        presentation::status_choice_style(Status::OPEN),
+        presentation::status_choice_style(Status::IN_PROGRESS),
+        presentation::status_choice_style(Status::PAUSED),
+        presentation::status_choice_style(Status::DONE),
+        presentation::status_choice_style(Status::CANCELLED),
+    };
+}
 
 /** Maps a select index to a status (out-of-range falls back to OPEN). */
 Status status_from_index(std::size_t index) {
@@ -167,6 +190,22 @@ std::optional<std::chrono::year_month_day> from_tm(const std::tm& picked) {
         return std::nullopt;
     }
     return date;
+}
+
+/**
+ * Colors the Due cell by its live value, mirroring the agenda's relative-due
+ * style (red overdue, yellow today, gray future); an empty date stays default.
+ */
+sparcli::TextStyle due_cell_style(const ScForm* form, int field, void*) {
+    std::tm picked{};
+    if(!sc_form_get_date(form, field, &picked)) {
+        return sparcli::TextStyle{};   // no date -> default
+    }
+    const auto due = from_tm(picked);
+    if(!due) {
+        return sparcli::TextStyle{};
+    }
+    return presentation::relative_due_style(*due, today());
 }
 
 /** Resolves the editor for the multiline field: config, then $EDITOR, nvim. */
@@ -464,10 +503,12 @@ std::optional<FormResult> run_task_form(
                 "Priority", PRIORITY_CHOICES, priority_to_index(state.priority),
                 {.width_mode = SC_FWIDTH_PCT, .width = 20}
             );
+            form.set_choice_styles(priority_id, priority_choice_styles());
             due_id = form.add_date(
                 "Due", due_initial,
                 {.width_mode = SC_FWIDTH_PCT, .width = 20, .date_optional = true,
-                 .help = "enter picks a date, del clears it"}
+                 .help = "enter picks a date, del clears it",
+                 .value_style = due_cell_style}
             );
             someday_id = form.add_bool(
                 "Someday", state.someday,
@@ -477,6 +518,7 @@ std::optional<FormResult> run_task_form(
                 "Status", STATUS_CHOICES, status_to_index(state.status),
                 {.width_mode = SC_FWIDTH_PCT, .width = 20}
             );
+            form.set_choice_styles(status_id, status_choice_styles());
         }
 
         // In the note layout the checkbox gets its own full-width row; on the
