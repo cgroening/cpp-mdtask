@@ -24,6 +24,10 @@ public:
     [[nodiscard]] std::optional<Task> find_by_id(
         const std::string& id
     ) const override;
+    /** Always empty: an in-memory store never fails to parse a file. */
+    [[nodiscard]] std::vector<std::string> load_warnings() const override {
+        return {};
+    }
     void save(const Task& task) override;
     void update(const Task& task) override;
     void archive(const Task& task) override;

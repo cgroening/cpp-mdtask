@@ -155,6 +155,10 @@ std::vector<Task> TaskService::archived_tasks() const {
     return repository_.find_archived();
 }
 
+std::vector<std::string> TaskService::load_warnings() const {
+    return repository_.load_warnings();
+}
+
 std::vector<Task> TaskService::open_tasks() const {
     auto tasks = repository_.find_all();
     const auto removed = std::ranges::remove_if(tasks, [](const Task& task) {
@@ -208,6 +212,23 @@ Result<Task> TaskService::shift_due(const std::string& id, int days) {
     task->someday = false;
     // The day changed, so re-append it under the other tasks of the new date.
     task->order = append_order(task->note);
+    repository_.update(*task);
+    return *task;
+}
+
+Result<Task> TaskService::set_due(
+    const std::string& id, std::optional<std::chrono::year_month_day> due
+) {
+    auto task = repository_.find_by_id(id);
+    if(!task) {
+        return std::unexpected(task_not_found_error(id));
+    }
+    task->due = due;
+    if(due) {
+        // A dated task is no longer "someday"; re-append it under its new day.
+        task->someday = false;
+        task->order = append_order(task->note);
+    }
     repository_.update(*task);
     return *task;
 }

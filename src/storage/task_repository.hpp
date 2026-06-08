@@ -52,6 +52,15 @@ public:
     ) const = 0;
 
     /**
+     * Warnings from the most recent load (e.g. files skipped because their
+     * front matter could not be parsed). A backend that cannot fail to load
+     * returns an empty vector.
+     *
+     * @return Human-readable warning lines; empty when the last load was clean.
+     */
+    [[nodiscard]] virtual std::vector<std::string> load_warnings() const = 0;
+
+    /**
      * Persists a new task.
      *
      * @param task The task to store.

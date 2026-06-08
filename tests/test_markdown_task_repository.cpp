@@ -232,5 +232,33 @@ void run_markdown_task_repository_tests() {
         CHECK(!any_file_named(notes_dir, "nodate--pay-the-invoice.md"));
     }
 
+    // A file with malformed front matter is skipped (not shown as a ghost
+    // task), recorded as a load warning, and does not abort the whole load.
+    {
+        const fs::path bad_dir = dir / "bad-tasks";
+        fs::remove_all(bad_dir, ec);
+        MarkdownTaskRepository repository(
+            bad_dir, notes_dir, archive_dir, notes_archive_dir
+        );
+        repository.save(sample_task());   // one valid task
+        CHECK(repository.find_all().size() == 1);
+        CHECK(repository.load_warnings().empty());
+
+        // `{a b}` is a flow mapping without a colon: invalid YAML.
+        std::ofstream(bad_dir / "2026-01-01--broken.md")
+            << "---\ntitle: Broken\nbad: {a b}\n---\n\n# Broken\n\nbody\n";
+
+        const auto loaded = repository.find_all();
+        CHECK(loaded.size() == 1);                    // the valid one survives
+        CHECK(loaded[0].id == "id000000");
+        CHECK(repository.load_warnings().size() == 1);  // the broken one warned
+
+        // The warning names the file and carries sparcli's concrete reason,
+        // including the 1-based source line of the YAML error.
+        const std::string warning = repository.load_warnings()[0];
+        CHECK(warning.find("2026-01-01--broken.md") != std::string::npos);
+        CHECK(warning.find("line ") != std::string::npos);
+    }
+
     fs::remove_all(dir, ec);
 }

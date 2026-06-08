@@ -60,11 +60,21 @@ Modal (vim-style): the finder starts in normal mode.
 
 - `Enter` – edit the task in a form (Ctrl-G opens the description in `$EDITOR`).
 - `d` – toggle done (greyed in place, kept until archived).
+- `p` – cycle status (open → in progress → paused → cancelled).
+- `t` – pick a due date from a calendar.
 - `+` / `-` – shift the due date by one day (the cursor stays on the task).
 - `a` – archive the task.
-- `n` – add a new task.
+- `n` – add a new task (`N` adds the opposite item type).
+- `Space` – mark/unmark the task; `d`, `p`, `a`, `t`, `+`/`-` and `Delete` then
+  apply to every marked task at once.
 - `i` – filter (type to search titles); `Esc` returns to normal mode.
+- `?` – show all keyboard shortcuts.
 - `Esc` – quit.
+
+The first column shows a status glyph; the row also carries a subtask
+progress count (`2/5`, from `- [ ]`/`- [x]` checkboxes in the body) and a
+relative-due hint (`in 3d`, `2d overdue`). Section headers show
+`(open: x; done: y)`.
 
 ## CLI commands
 

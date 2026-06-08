@@ -74,6 +74,23 @@ namespace mdtask::presentation {
 [[nodiscard]] sparcli::TextStyle title_style(const Task& task);
 
 /**
+ * Relative-due label for a due date, e.g. "today", "tomorrow", "yesterday",
+ * "in 3d" or "2d overdue".
+ *
+ * @param due   The task's due date.
+ * @param today The reference day.
+ * @return The relative label.
+ */
+[[nodiscard]] std::string format_relative_due(
+    std::chrono::year_month_day due, std::chrono::year_month_day today
+);
+
+/** Color/attributes for the relative-due cell (red overdue, yellow soon). */
+[[nodiscard]] sparcli::TextStyle relative_due_style(
+    std::chrono::year_month_day due, std::chrono::year_month_day today
+);
+
+/**
  * Wraps a content line in the app's pinned, full-width header panel (a rounded
  * accent border). Used as the fullscreen header above the finder and the form.
  */

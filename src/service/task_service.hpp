@@ -76,6 +76,9 @@ public:
     /** Returns the tasks that are not completed yet. */
     [[nodiscard]] std::vector<Task> open_tasks() const;
 
+    /** Warnings from the most recent load (files skipped as malformed). */
+    [[nodiscard]] std::vector<std::string> load_warnings() const;
+
     /**
      * Toggles a task between done and open, recording or clearing the
      * completion timestamp accordingly.
@@ -107,6 +110,21 @@ public:
      * @return The updated task, or a NOT_FOUND error.
      */
     [[nodiscard]] Result<Task> shift_due(const std::string& id, int days);
+
+    /**
+     * Sets a task's due date to a specific day, or clears it.
+     *
+     * Setting a date drops the `someday` flag (the task joins the calendar);
+     * clearing it leaves the flag untouched. The task is re-appended at the end
+     * of its new day so it sorts beneath the others there.
+     *
+     * @param id  Id of an existing task.
+     * @param due The new due date, or std::nullopt to clear it.
+     * @return The updated task, or a NOT_FOUND error.
+     */
+    [[nodiscard]] Result<Task> set_due(
+        const std::string& id, std::optional<std::chrono::year_month_day> due
+    );
 
     /**
      * Sets a task's priority.

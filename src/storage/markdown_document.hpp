@@ -23,6 +23,18 @@ struct MarkdownDocument {
 
     /** Body text after the front matter (may be empty). */
     std::string body;
+
+    /**
+     * True when a front-matter block was present but could not be parsed.
+     * sparcli's Markdown parser is lenient (it yields no front matter rather
+     * than throwing), but flags this case via `Markdown::frontmatter_malformed`,
+     * so callers can skip and report a broken file instead of treating it as
+     * having empty metadata.
+     */
+    bool frontmatter_malformed = false;
+
+    /** Parse error of a malformed front-matter block (empty when fine). */
+    std::string frontmatter_error;
 };
 
 /**

@@ -154,6 +154,18 @@ std::vector<AgendaSection> build_agenda(
     return sections;
 }
 
+SectionCounts count_section(const AgendaSection& section) {
+    SectionCounts counts;
+    for(const auto& task : section.tasks) {
+        if(is_terminal(task.status)) {
+            ++counts.done;
+        } else {
+            ++counts.open;
+        }
+    }
+    return counts;
+}
+
 std::vector<ArchiveGroup> group_archive(
     const std::vector<Task>& archived, std::chrono::year_month_day today
 ) {

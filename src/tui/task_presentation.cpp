@@ -41,7 +41,10 @@ std::string format_completed(
     return format_date(*date, format);
 }
 
-std::string section_header(
+namespace {
+
+/** Base label for a section, without the open/done count suffix. */
+std::string section_label(
     const AgendaSection& section,
     std::chrono::year_month_day today,
     DateFormat format
@@ -65,6 +68,20 @@ std::string section_header(
         return "Tomorrow - " + date;
     }
     return date;
+}
+
+}  // namespace
+
+std::string section_header(
+    const AgendaSection& section,
+    std::chrono::year_month_day today,
+    DateFormat format
+) {
+    const SectionCounts counts = count_section(section);
+    return std::format(
+        "{} (open: {}; done: {})",
+        section_label(section, today, format), counts.open, counts.done
+    );
 }
 
 sparcli::TextStyle section_style(
@@ -193,6 +210,38 @@ sparcli::TextStyle title_style(const Task& task) {
         );
     }
     return sparcli::TextStyle{};
+}
+
+std::string format_relative_due(
+    std::chrono::year_month_day due, std::chrono::year_month_day today
+) {
+    const int days = days_between(today, due);
+    if(days == 0) {
+        return "today";
+    }
+    if(days == 1) {
+        return "tomorrow";
+    }
+    if(days == -1) {
+        return "yesterday";
+    }
+    if(days > 0) {
+        return std::format("in {}d", days);
+    }
+    return std::format("{}d overdue", -days);
+}
+
+sparcli::TextStyle relative_due_style(
+    std::chrono::year_month_day due, std::chrono::year_month_day today
+) {
+    const int days = days_between(today, due);
+    if(days < 0) {
+        return sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::red());
+    }
+    if(days <= 1) {
+        return sparcli::style(SC_TEXT_ATTR_NONE, sparcli::palette::yellow());
+    }
+    return sparcli::style(SC_TEXT_ATTR_DIM);
 }
 
 sparcli::Rendered app_header(const sparcli::Text& content) {

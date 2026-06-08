@@ -42,6 +42,7 @@ public:
     [[nodiscard]] std::optional<Task> find_by_id(
         const std::string& id
     ) const override;
+    [[nodiscard]] std::vector<std::string> load_warnings() const override;
     void save(const Task& task) override;
     void update(const Task& task) override;
     void archive(const Task& task) override;
@@ -49,10 +50,14 @@ public:
     void remove(const Task& task) override;
 
 private:
-    /** Reads and parses the items at `paths`, stamping each with `note`. */
-    [[nodiscard]] static std::vector<Task> load_tasks(
+    /**
+     * Reads and parses the items at `paths`, stamping each with `note`. A file
+     * that cannot be read or parsed is skipped and recorded in `load_warnings_`
+     * instead of aborting the whole load.
+     */
+    [[nodiscard]] std::vector<Task> load_tasks(
         const std::vector<std::filesystem::path>& paths, bool note
-    );
+    ) const;
 
     /** Active directory an item belongs in, by its note flag. */
     [[nodiscard]] const std::filesystem::path& active_dir(bool note) const;
@@ -63,6 +68,9 @@ private:
     std::filesystem::path notes_dir_;
     std::filesystem::path archive_dir_;
     std::filesystem::path notes_archive_dir_;
+
+    /** Human-readable warnings from the most recent load (skipped files). */
+    mutable std::vector<std::string> load_warnings_;
 };
 
 /**

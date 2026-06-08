@@ -50,6 +50,20 @@ struct AgendaSection {
     const std::vector<Task>& tasks, std::chrono::year_month_day today
 );
 
+/** Open/done tally for a section header (cancelled counts as done). */
+struct SectionCounts {
+    int open = 0;   /**< Non-terminal tasks (open, in progress, paused). */
+    int done = 0;   /**< Terminal tasks (done or cancelled). */
+};
+
+/**
+ * Counts a section's tasks as open vs. done for the header suffix.
+ *
+ * @param section The agenda section to tally.
+ * @return The counts; terminal tasks (done and cancelled) count as done.
+ */
+[[nodiscard]] SectionCounts count_section(const AgendaSection& section);
+
 /** One labelled group of archived tasks (a month, a year, or the no-date set). */
 struct ArchiveGroup {
     std::string header;          /**< Display label, e.g. "June 2026" or "2024". */

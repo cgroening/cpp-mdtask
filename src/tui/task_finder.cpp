@@ -1,6 +1,8 @@
 #include "tui/task_finder.hpp"
 
 #include "domain/agenda.hpp"
+#include "domain/subtasks.hpp"
+#include "tui/finder_actions.hpp"
 #include "tui/task_form.hpp"
 #include "tui/task_presentation.hpp"
 #include "util/date.hpp"
@@ -8,11 +10,14 @@
 #include <sparcli.hpp>
 
 #include <algorithm>
+#include <ctime>
 #include <cstdint>
+#include <format>
 #include <functional>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace mdtask {
@@ -22,9 +27,10 @@ namespace {
 // Which view (and therefore which table layout) the finder is rendering.
 enum class Layout { TASKS, NOTES, ARCHIVE };
 
-// Per-layout column headers (✎ = note marker, ◌ = status).
-constexpr const char* TASK_HEADERS[]   = {"!", "\xe2\x97\x8c", "Task",
-                                          "Due/Done"};
+// Per-layout column headers (✎ = note marker, ◌ = status, ☑ = subtasks,
+// → = relative due). The TASKS view leads with the status glyph.
+constexpr const char* TASK_HEADERS[]   = {"\xe2\x97\x8c", "!", "\xe2\x98\x91",
+                                          "Task", "Due/Done", "\xe2\x86\x92"};
 constexpr const char* NOTE_HEADERS[]   = {"Task"};
 constexpr const char* ARCHIVE_HEADERS[] = {"\xe2\x9c\x8e", "!", "\xe2\x97\x8c",
                                            "Task", "Due/Done"};
@@ -42,29 +48,8 @@ ColumnSpec column_spec(Layout layout) {
         case Layout::ARCHIVE: return {ARCHIVE_HEADERS, 5, 3};
         case Layout::TASKS:   break;
     }
-    return {TASK_HEADERS, 4, 2};
+    return {TASK_HEADERS, 6, 3};
 }
-
-// Shortcut ids reported via Shortcuts::fired() (-1 = a bare Enter).
-enum {
-    ACT_TOGGLE_DONE    = 1,
-    ACT_SHIFT_PLUS     = 2,
-    ACT_SHIFT_MINUS    = 3,
-    ACT_ARCHIVE        = 4,
-    ACT_NEW            = 5,
-    ACT_TOGGLE_ARCHIVE = 6,
-    ACT_RESTORE        = 7,
-    ACT_JUMP           = 8,
-    ACT_CYCLE_STATUS   = 9,
-    ACT_MOVE_UP        = 10,
-    ACT_MOVE_DOWN      = 11,
-    ACT_MOVE_TOP       = 12,
-    ACT_MOVE_BOTTOM    = 13,
-    ACT_TOGGLE_LIST    = 14,
-    ACT_DELETE         = 15,
-    ACT_QUIT           = 16,
-    ACT_NEW_OTHER      = 17,
-};
 
 /** Builds an Alt(+Shift)+named-key chord for the reorder shortcuts. */
 sparcli::KeyChord alt_key(ScKeyType key, bool shift) {
@@ -74,19 +59,6 @@ sparcli::KeyChord alt_key(ScKeyType key, bool shift) {
             SC_MOD_ALT | (shift ? SC_MOD_SHIFT : SC_MOD_NONE)
         ),
     };
-}
-
-/** Status cycle (key `p`): open -> in progress -> paused -> cancelled -> open.
-    Done is set with `d`, not via this cycle; cycling a done task reopens it. */
-Status next_status(Status status) {
-    switch(status) {
-        case Status::OPEN:        return Status::IN_PROGRESS;
-        case Status::IN_PROGRESS: return Status::PAUSED;
-        case Status::PAUSED:      return Status::CANCELLED;
-        case Status::CANCELLED:   break;
-        case Status::DONE:        break;
-    }
-    return Status::OPEN;
 }
 
 /** A section the jump picker can move the cursor to. */
@@ -106,39 +78,20 @@ struct RowIndex {
     std::unordered_map<std::uint64_t, std::size_t> index_by_id;
 };
 
-/**
- * Picks which task to focus after deleting the row at `cursor`, so the cursor
- * stays put instead of jumping to the top: the row that slides up into the gap
- * (next in the same section), else the row above in the section, else the first
- * row of the next section, else the nearest row of the previous section.
- *
- * @return The focus id of the chosen task, or 0 when nothing is left.
- */
-std::uint64_t focus_after_delete(const RowIndex& rows, std::size_t cursor) {
-    const auto& by_index = rows.by_index;
-    const std::size_t count = by_index.size();
-
-    // Tasks of one section are contiguous; a neighbour task means same section.
-    if(cursor + 1 < count && by_index[cursor + 1]) {
-        return row_id(by_index[cursor + 1]->id);
+/** Task id for each finder row, or nullopt for a section-header row. */
+std::vector<std::optional<std::string>> row_task_ids(const RowIndex& rows) {
+    std::vector<std::optional<std::string>> ids;
+    ids.reserve(rows.by_index.size());
+    for(const auto& entry : rows.by_index) {
+        ids.push_back(
+            entry ? std::optional<std::string>(entry->id) : std::nullopt
+        );
     }
-    if(cursor > 0 && by_index[cursor - 1]) {
-        return row_id(by_index[cursor - 1]->id);
-    }
-    // The section is now empty: first task of the next section...
-    for(std::size_t i = cursor + 1; i < count; ++i) {
-        if(by_index[i]) {
-            return row_id(by_index[i]->id);
-        }
-    }
-    // ...otherwise the nearest task in a previous section.
-    for(std::size_t i = cursor; i-- > 0;) {
-        if(by_index[i]) {
-            return row_id(by_index[i]->id);
-        }
-    }
-    return 0;
+    return ids;
 }
+
+/** A multi-selected row is tinted across all of its cells. */
+using Selection = std::unordered_set<std::string>;
 
 /** Adds one row in the given `layout` and records it in `rows` at `index`. */
 void add_row(
@@ -148,7 +101,8 @@ void add_row(
     DateFormat format,
     Layout layout,
     RowIndex& rows,
-    std::size_t& index
+    std::size_t& index,
+    const Selection& selected
 ) {
     const bool overdue =
         task.due && *task.due < today && !is_terminal(task.status);
@@ -194,20 +148,54 @@ void add_row(
                 due_done_style,
             };
             break;
-        case Layout::TASKS:
+        case Layout::TASKS: {
+            // Subtask progress "<done>/<total>", blank when the body has none;
+            // green once every box is ticked.
+            const SubtaskProgress sub = count_subtasks(task.description);
+            const std::string sub_text =
+                sub.total > 0 ? std::format("{}/{}", sub.done, sub.total) : "";
+            const sparcli::TextStyle sub_style =
+                (sub.total > 0 && sub.done == sub.total)
+                    ? sparcli::style(
+                          SC_TEXT_ATTR_NONE, sparcli::palette::green()
+                      )
+                    : sparcli::style(SC_TEXT_ATTR_DIM);
+
+            // Relative due ("in 3d" / "2d overdue"), only for dated, non-terminal
+            // tasks; terminal items show their completion date instead.
+            std::string rel_text;
+            sparcli::TextStyle rel_style = sparcli::style(SC_TEXT_ATTR_DIM);
+            if(task.due && !is_terminal(task.status)) {
+                rel_text =
+                    presentation::format_relative_due(*task.due, today);
+                rel_style =
+                    presentation::relative_due_style(*task.due, today);
+            }
+
             fields = {
-                presentation::priority_symbol(task.priority),
                 presentation::status_symbol(task, overdue),
+                presentation::priority_symbol(task.priority),
+                sub_text,
                 task.title,
                 due_done_text,
+                rel_text,
             };
             styles = {
-                presentation::priority_style(task.priority),
                 presentation::status_style(task, overdue),
+                presentation::priority_style(task.priority),
+                sub_style,
                 presentation::title_style(task),
                 due_done_style,
+                rel_style,
             };
             break;
+        }
+    }
+    // A row the user marked with Space is tinted across every cell.
+    if(selected.contains(task.id)) {
+        for(auto& cell_style : styles) {
+            cell_style.bg = sparcli::palette::purple_dark();
+        }
     }
     finder.add_row_styled(fields, styles);
 
@@ -235,7 +223,8 @@ RowIndex populate(
     sparcli::Fuzzy& finder,
     const std::vector<AgendaSection>& agenda,
     std::chrono::year_month_day today,
-    DateFormat format
+    DateFormat format,
+    const Selection& selected
 ) {
     RowIndex rows;
     std::size_t index = 0;
@@ -249,7 +238,10 @@ RowIndex populate(
         ++index;
 
         for(const auto& task : section.tasks) {
-            add_row(finder, task, today, format, Layout::TASKS, rows, index);
+            add_row(
+                finder, task, today, format, Layout::TASKS, rows, index,
+                selected
+            );
         }
     }
     return rows;
@@ -260,12 +252,15 @@ RowIndex populate_notes(
     sparcli::Fuzzy& finder,
     const std::vector<Task>& notes,
     std::chrono::year_month_day today,
-    DateFormat format
+    DateFormat format,
+    const Selection& selected
 ) {
     RowIndex rows;
     std::size_t index = 0;
     for(const auto& note : notes) {
-        add_row(finder, note, today, format, Layout::NOTES, rows, index);
+        add_row(
+            finder, note, today, format, Layout::NOTES, rows, index, selected
+        );
     }
     return rows;
 }
@@ -279,6 +274,7 @@ RowIndex populate_archive(
 ) {
     RowIndex rows;
     std::size_t index = 0;
+    const Selection none;
     const sparcli::TextStyle header_style = sparcli::style(
         SC_TEXT_ATTR_BOLD,
         sparcli::palette::fg_darken_2(),
@@ -291,7 +287,9 @@ RowIndex populate_archive(
         ++index;
 
         for(const auto& task : group.tasks) {
-            add_row(finder, task, today, format, Layout::ARCHIVE, rows, index);
+            add_row(
+                finder, task, today, format, Layout::ARCHIVE, rows, index, none
+            );
         }
     }
     return rows;
@@ -338,8 +336,126 @@ std::uint64_t run_section_jump(const std::vector<JumpTarget>& targets) {
     return 0;
 }
 
+/** Outcome of the inline due-date picker. */
+struct DueChoice {
+    bool changed = false;   /**< False when the user cancelled (Esc). */
+    std::optional<std::chrono::year_month_day> due;   /**< Empty = cleared. */
+};
+
+/** Opens the calendar seeded from `current`; lets the user clear the date. */
+DueChoice run_due_picker(std::optional<std::chrono::year_month_day> current) {
+    std::tm seed{};
+    if(current) {
+        seed.tm_year = static_cast<int>(current->year()) - 1900;
+        seed.tm_mon =
+            static_cast<int>(static_cast<unsigned>(current->month())) - 1;
+        seed.tm_mday =
+            static_cast<int>(static_cast<unsigned>(current->day()));
+    }
+    sparcli::DatePickerOpts opts{};
+    opts.prompt = "Due date";
+    opts.accent = sparcli::palette::purple();
+    opts.allow_clear = true;
+    opts.box = {
+        .enabled = true,
+        .border = {.type = SC_BORDER_ROUNDED,
+                   .color = sparcli::palette::purple()},
+        .width_mode = SC_WIDTH_FULL,
+    };
+
+    const auto picked = sparcli::datepicker(seed, opts);
+    if(!picked) {
+        return {};   // cancelled
+    }
+    if(sparcli::date_empty(*picked)) {
+        return {.changed = true, .due = std::nullopt};
+    }
+    const std::chrono::year_month_day day{
+        std::chrono::year{picked->tm_year + 1900},
+        std::chrono::month{static_cast<unsigned>(picked->tm_mon + 1)},
+        std::chrono::day{static_cast<unsigned>(picked->tm_mday)},
+    };
+    return {.changed = true, .due = day};
+}
+
+/** Shows the keyboard-shortcut reference in a yellow panel (dismiss with Enter). */
+void run_help() {
+    static constexpr const char* HELP =
+        "Navigation\n"
+        "  up/down or j/k   move cursor\n"
+        "  i                filter (type to search); Esc back to normal\n"
+        "  s                jump to a section\n"
+        "  v                switch Tasks / Notes\n"
+        "  b                show / hide the Archive\n"
+        "  Enter            edit the item\n"
+        "  q or Esc         quit\n"
+        "\n"
+        "Actions (Tasks / Notes)\n"
+        "  d                toggle done\n"
+        "  p                cycle status (open / in progress / paused / "
+        "cancelled)\n"
+        "  t                pick a due date (calendar)\n"
+        "  + / -            shift the due date by one day\n"
+        "  a                archive\n"
+        "  Delete           delete permanently\n"
+        "  n / N            new item / new opposite type\n"
+        "  Alt+up/down      reorder   (Alt+Shift = to top / bottom)\n"
+        "\n"
+        "Multi-select\n"
+        "  Space            mark / unmark the item\n"
+        "  d p a t + - Del  apply to every marked item\n"
+        "\n"
+        "Archive\n"
+        "  r                restore the item\n"
+        "\n"
+        "  ?                this help";
+
+    sparcli::Select dialog(sparcli::SelectOpts{
+        .prompt = HELP,
+        .accent = sparcli::palette::yellow(),
+        .box = {
+            .enabled = true,
+            .border = {.type = SC_BORDER_ROUNDED,
+                       .color = sparcli::palette::yellow()},
+            .width_mode = SC_WIDTH_FULL,
+        },
+    });
+    dialog.add("OK");
+    static_cast<void>(dialog.run_one());
+}
+
+/** Shows the list of skipped (malformed/unreadable) files in a yellow panel. */
+void show_load_warnings(const std::vector<std::string>& warnings) {
+    constexpr std::size_t MAX_SHOWN = 12;
+    std::string text =
+        "Some files were skipped and are not shown:\n";
+    std::size_t shown = 0;
+    for(const auto& warning : warnings) {
+        if(shown++ >= MAX_SHOWN) {
+            text += std::format("  ... and {} more\n", warnings.size() - shown
+                + 1);
+            break;
+        }
+        text += "  - " + warning + "\n";
+    }
+    text += "\nFix their YAML front matter to bring them back.";
+
+    sparcli::Select dialog(sparcli::SelectOpts{
+        .prompt = text.c_str(),
+        .accent = sparcli::palette::yellow(),
+        .box = {
+            .enabled = true,
+            .border = {.type = SC_BORDER_ROUNDED,
+                       .color = sparcli::palette::yellow()},
+            .width_mode = SC_WIDTH_FULL,
+        },
+    });
+    dialog.add("OK");
+    static_cast<void>(dialog.run_one());
+}
+
 /** Builds the pinned tab bar "Tasks | Notes | Archive" (active tab 0/1/2). */
-sparcli::Rendered build_tabbar(int active) {
+sparcli::Rendered build_tabbar(int active, std::size_t skipped) {
     const char* const names[] = {"Tasks", "Notes", "Archive"};
     const sparcli::TextStyle app_title = sparcli::style(
         SC_TEXT_ATTR_BOLD, sparcli::palette::purple()
@@ -356,6 +472,12 @@ sparcli::Rendered build_tabbar(int active) {
         }
         bar.append(names[i], i == active ? on : off);
     }
+    if(skipped > 0) {
+        bar.append(
+            std::format("    \xe2\x9a\xa0 {} skipped", skipped),   // ⚠
+            sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::yellow())
+        );
+    }
     return presentation::app_header(bar);
 }
 
@@ -369,7 +491,9 @@ sparcli::FuzzyOpts make_opts(const ColumnSpec& cols) {
     opts.search_columns = std::uint64_t{1} << cols.task_col;
     opts.stretch_columns = std::uint64_t{1} << cols.task_col;
     opts.order = SC_FUZZY_ORDER_INSERTION;
-    opts.section_counts = true;
+    // The header carries its own "(open: x; done: y)" suffix, so the finder's
+    // automatic per-section count is switched off.
+    opts.section_counts = false;
     opts.modal = true;                 // vim-style normal/insert modes
     opts.fullscreen = true;            // fill the alternate screen
     opts.valign = SC_VALIGN_TOP;
@@ -417,10 +541,26 @@ void run_task_finder(TaskService& service, const Config& config) {
         return;
     }
 
+    // Files that could not be parsed are skipped, not fatal; tell the user once
+    // up front which ones (the header also keeps a "N skipped" reminder).
+    std::vector<std::string> startup_warnings;
+    static_cast<void>(service.all_tasks());
+    for(auto& warning : service.load_warnings()) {
+        startup_warnings.push_back(std::move(warning));
+    }
+    static_cast<void>(service.notes());
+    for(auto& warning : service.load_warnings()) {
+        startup_warnings.push_back(std::move(warning));
+    }
+    if(!startup_warnings.empty()) {
+        show_load_warnings(startup_warnings);
+    }
+
     enum class View { TASKS, NOTES };
     View list_view = View::TASKS;  // the active non-archive list
     bool show_archive = false;     // overlays the archive on top of the list
     std::uint64_t focus = 0;       // id to keep the cursor on after a rebuild
+    Selection selected;            // task ids marked with Space for bulk actions
 
     // One alternate-screen session spans the whole loop, so switching between
     // the views and the edit form never flickers.
@@ -444,13 +584,16 @@ void run_task_finder(TaskService& service, const Config& config) {
             show_archive ? "back" : "archive"
         ).on_return(sparcli::key_special(SC_KEY_DELETE), ACT_DELETE, "delete")
          .on_return(sparcli::key_special(SC_KEY_BACKSPACE), ACT_DELETE)
+         .on_return(sparcli::key_char('?'), ACT_HELP, "help")
          .on_return(sparcli::key_char('q'), ACT_QUIT, "quit");
 
         if(layout == Layout::ARCHIVE) {
             shortcuts.on_return(sparcli::key_char('r'), ACT_RESTORE, "restore")
                      .on_return(sparcli::key_char('s'), ACT_JUMP, "section");
         } else if(layout == Layout::NOTES) {
-            shortcuts.on_return(sparcli::key_char('n'), ACT_NEW, "new")
+            shortcuts.on_return(sparcli::key_char(' '), ACT_TOGGLE_SELECT,
+                                "select")
+                     .on_return(sparcli::key_char('n'), ACT_NEW, "new")
                      .on_return(sparcli::key_char('N'), ACT_NEW_OTHER,
                                 "new task")
                      .on_return(sparcli::key_char('a'), ACT_ARCHIVE, "archive")
@@ -459,9 +602,12 @@ void run_task_finder(TaskService& service, const Config& config) {
                      .on_return(alt_key(SC_KEY_UP, true), ACT_MOVE_TOP, "to end")
                      .on_return(alt_key(SC_KEY_DOWN, true), ACT_MOVE_BOTTOM);
         } else {
-            shortcuts.on_return(sparcli::key_char('d'), ACT_TOGGLE_DONE, "done")
+            shortcuts.on_return(sparcli::key_char(' '), ACT_TOGGLE_SELECT,
+                                "select")
+                     .on_return(sparcli::key_char('d'), ACT_TOGGLE_DONE, "done")
                      .on_return(sparcli::key_char('p'), ACT_CYCLE_STATUS,
                                 "status")
+                     .on_return(sparcli::key_char('t'), ACT_PICK_DATE, "date")
                      .on_return(sparcli::key_char('+'), ACT_SHIFT_PLUS, "+1d")
                      .on_return(sparcli::key_char('='), ACT_SHIFT_PLUS)
                      .on_return(sparcli::key_char('-'), ACT_SHIFT_MINUS, "-1d")
@@ -486,9 +632,11 @@ void run_task_finder(TaskService& service, const Config& config) {
         } else {
             items = service.all_tasks();
         }
+        // load_warnings() reflects the load that just produced `items`.
+        const std::size_t skipped = service.load_warnings().size();
 
         // The header is borrowed by run(), so it must outlive the finder.
-        const sparcli::Rendered header = build_tabbar(active_tab);
+        const sparcli::Rendered header = build_tabbar(active_tab, skipped);
 
         sparcli::FuzzyOpts opts = make_opts(column_spec(layout));
         opts.header = header.get();
@@ -509,10 +657,12 @@ void run_task_finder(TaskService& service, const Config& config) {
                 );
             }
         } else if(layout == Layout::NOTES) {
-            rows = populate_notes(finder, items, today, config.date_format);
+            rows = populate_notes(
+                finder, items, today, config.date_format, selected
+            );
         } else {
             const auto agenda = build_agenda(items, today);
-            rows = populate(finder, agenda, today, config.date_format);
+            rows = populate(finder, agenda, today, config.date_format, selected);
             for(const auto& section : agenda) {
                 jump_targets.push_back({
                     presentation::section_header(
@@ -529,14 +679,19 @@ void run_task_finder(TaskService& service, const Config& config) {
             }
         }
 
-        const auto selected = finder.run();
-        if(!selected) {
+        const auto chosen_row = finder.run();
+        if(!chosen_row) {
             break;   // Esc / Ctrl-C quits the app
         }
         const int action = shortcuts.fired();
 
         if(action == ACT_QUIT) {
             break;   // `q` quits the app
+        }
+
+        if(action == ACT_HELP) {
+            run_help();
+            continue;
         }
 
         if(action == ACT_TOGGLE_LIST) {
@@ -556,6 +711,7 @@ void run_task_finder(TaskService& service, const Config& config) {
             show_archive = false;
             list_view = to_notes ? View::NOTES : View::TASKS;
             focus = 0;
+            selected.clear();   // marks do not carry across lists
             continue;
         }
 
@@ -566,6 +722,7 @@ void run_task_finder(TaskService& service, const Config& config) {
             }
             show_archive = !show_archive;
             focus = 0;
+            selected.clear();   // the archive is not multi-selectable
             continue;
         }
 
@@ -592,20 +749,47 @@ void run_task_finder(TaskService& service, const Config& config) {
             continue;
         }
 
-        const std::size_t cursor = *selected;
+        const std::size_t cursor = *chosen_row;
         if(cursor >= rows.by_index.size() || !rows.by_index[cursor]) {
             continue;   // cursor on a header or an empty result
         }
         const Task& task = *rows.by_index[cursor];
         focus = row_id(task.id);
 
+        // Space marks/unmarks the cursor task for the next bulk action.
+        if(action == ACT_TOGGLE_SELECT) {
+            if(!selected.erase(task.id)) {
+                selected.insert(task.id);
+            }
+            continue;
+        }
+
+        // The marked ids in display order, plus the tasks an action targets:
+        // the whole selection for bulk-capable actions, else just the cursor.
+        std::vector<std::string> selection;
+        for(const auto& entry : rows.by_index) {
+            if(entry && selected.contains(entry->id)) {
+                selection.push_back(entry->id);
+            }
+        }
+        const std::vector<std::string> targets =
+            action_targets(action, task.id, selection);
+        const bool consumed_selection =
+            !selection.empty() && action_is_bulk(action);
+
         // Delete works in every view, behind a confirm that defaults to No.
         if(action == ACT_DELETE) {
-            if(sparcli::confirm("Delete this item permanently?")
-                   .value_or(false)) {
+            const std::string prompt = targets.size() > 1
+                ? std::format("Delete {} items permanently?", targets.size())
+                : "Delete this item permanently?";
+            if(sparcli::confirm(prompt).value_or(false)) {
                 // Keep the cursor near the gap instead of jumping to the top.
-                focus = focus_after_delete(rows, cursor);
-                report(service.delete_task(task.id));
+                const auto next = focus_after_delete(row_task_ids(rows), cursor);
+                focus = next ? row_id(*next) : 0;
+                for(const auto& id : targets) {
+                    report(service.delete_task(id));
+                }
+                selected.clear();
                 if(show_archive && service.archived_tasks().empty()) {
                     show_archive = false;
                 }
@@ -624,10 +808,56 @@ void run_task_finder(TaskService& service, const Config& config) {
             continue;
         }
 
+        // The calendar picker needs the new date before it can be applied.
+        if(action == ACT_PICK_DATE) {
+            const DueChoice choice = run_due_picker(task.due);
+            if(choice.changed) {
+                for(const auto& id : targets) {
+                    report(service.set_due(id, choice.due));
+                }
+                if(consumed_selection) {
+                    selected.clear();
+                }
+            }
+            continue;
+        }
+
+        // Status cycling needs each target's current status; look it up by id.
+        std::unordered_map<std::string, const Task*> by_id;
+        for(const auto& item : items) {
+            by_id.emplace(item.id, &item);
+        }
+
         switch(action) {
-            case ACT_TOGGLE_DONE: report(service.toggle_done(task.id)); break;
+            case ACT_TOGGLE_DONE:
+                for(const auto& id : targets) {
+                    report(service.toggle_done(id));
+                }
+                break;
             case ACT_CYCLE_STATUS:
-                report(service.set_status(task.id, next_status(task.status)));
+                for(const auto& id : targets) {
+                    const auto found = by_id.find(id);
+                    if(found != by_id.end()) {
+                        report(service.set_status(
+                            id, next_status(found->second->status)
+                        ));
+                    }
+                }
+                break;
+            case ACT_SHIFT_PLUS:
+                for(const auto& id : targets) {
+                    report(service.shift_due(id, 1));
+                }
+                break;
+            case ACT_SHIFT_MINUS:
+                for(const auto& id : targets) {
+                    report(service.shift_due(id, -1));
+                }
+                break;
+            case ACT_ARCHIVE:
+                for(const auto& id : targets) {
+                    report(service.archive_task(id));
+                }
                 break;
             case ACT_MOVE_UP:
                 report(service.move_task(task.id, MoveDir::UP));     break;
@@ -637,13 +867,13 @@ void run_task_finder(TaskService& service, const Config& config) {
                 report(service.move_task(task.id, MoveDir::TOP));    break;
             case ACT_MOVE_BOTTOM:
                 report(service.move_task(task.id, MoveDir::BOTTOM)); break;
-            case ACT_SHIFT_PLUS:  report(service.shift_due(task.id, 1)); break;
-            case ACT_SHIFT_MINUS: report(service.shift_due(task.id, -1)); break;
-            case ACT_ARCHIVE:     report(service.archive_task(task.id)); break;
             default:
                 // A bare Enter opens the editor for the cursor item.
                 static_cast<void>(run_edit_task_form(service, config, task));
                 break;
+        }
+        if(consumed_selection) {
+            selected.clear();
         }
     }
 }

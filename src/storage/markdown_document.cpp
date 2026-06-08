@@ -54,13 +54,23 @@ std::optional<MarkdownDocument> read_markdown(
     const std::string text = read_file(path);
     serde::Markdown markdown = serde::Markdown::parse(text);
 
+    // sparcli flags a present-but-unparseable front-matter block and exposes the
+    // concrete sub-parse error; we surface it so the repository can skip and
+    // report the broken file with a precise reason.
+    const bool malformed = markdown.frontmatter_malformed();
+    std::string fm_error;
+    if(const auto parse_error = markdown.frontmatter_error()) {
+        fm_error = parse_error->what();
+    }
     serde::Value frontmatter = markdown.frontmatter()
         ? clone_view(*markdown.frontmatter())
         : serde::Value::object();
 
     return MarkdownDocument{
-        .frontmatter = std::move(frontmatter),
-        .body        = std::string(markdown.body()),
+        .frontmatter           = std::move(frontmatter),
+        .body                  = std::string(markdown.body()),
+        .frontmatter_malformed = malformed,
+        .frontmatter_error     = std::move(fm_error),
     };
 }
 

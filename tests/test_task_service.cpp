@@ -156,6 +156,35 @@ void run_service_tests() {
         CHECK(again->due == shift_days(today(), 1));
     }
 
+    // set_due sets a specific date, clearing someday; nullopt clears the date.
+    {
+        InMemoryTaskRepository repository;
+        TaskService service(repository);
+
+        const auto created =
+            service.add_task({.title = "Pick", .someday = true});
+        CHECK(created.has_value());
+
+        const auto dated = service.set_due(created->id, ymd(2026, 7, 1));
+        CHECK(dated.has_value());
+        CHECK(dated->due == ymd(2026, 7, 1));
+        CHECK(!dated->someday);
+
+        const auto cleared = service.set_due(created->id, std::nullopt);
+        CHECK(cleared.has_value());
+        CHECK(!cleared->due.has_value());
+    }
+
+    // set_due on an unknown id reports NOT_FOUND.
+    {
+        InMemoryTaskRepository repository;
+        TaskService service(repository);
+
+        const auto missing = service.set_due("nope", ymd(2026, 7, 1));
+        CHECK(!missing.has_value());
+        CHECK(missing.error().code == ErrorCode::NOT_FOUND);
+    }
+
     // set_priority updates only the priority.
     {
         InMemoryTaskRepository repository;

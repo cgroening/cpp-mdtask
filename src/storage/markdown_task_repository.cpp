@@ -324,40 +324,61 @@ std::optional<fs::path> find_path_by_id(
 
 std::vector<Task> MarkdownTaskRepository::load_tasks(
     const std::vector<fs::path>& paths, bool note
-) {
+) const {
     std::vector<Task> tasks;
     for(const auto& path : paths) {
         try {
             if(const auto document = read_markdown(path)) {
+                if(document->frontmatter_malformed) {
+                    const std::string reason = document->frontmatter_error.empty()
+                        ? "front matter is not valid YAML"
+                        : document->frontmatter_error;
+                    const std::string message = "skipped malformed "
+                        + path.filename().string() + ": " + reason;
+                    sparcli::logging::warn(message);
+                    load_warnings_.push_back(message);
+                    continue;
+                }
                 Task task = document_to_task(*document, path);
                 task.note = note;   // note-ness comes from the storage location
                 tasks.push_back(std::move(task));
             }
         } catch(const StorageError& error) {
-            sparcli::logging::warn(
-                std::string("skipping unreadable task: ") + error.what()
-            );
+            const std::string message =
+                "skipped unreadable " + path.filename().string() + ": "
+                + error.what();
+            sparcli::logging::warn(message);
+            load_warnings_.push_back(message);
         } catch(const serde::ParseError& error) {
-            sparcli::logging::warn(
-                "skipping malformed task " + path.string() + ": " + error.what()
-            );
+            const std::string message =
+                "skipped malformed " + path.filename().string() + ": "
+                + error.what();
+            sparcli::logging::warn(message);
+            load_warnings_.push_back(message);
         }
     }
     return tasks;
 }
 
+std::vector<std::string> MarkdownTaskRepository::load_warnings() const {
+    return load_warnings_;
+}
+
 std::vector<Task> MarkdownTaskRepository::find_all() const {
     // Non-recursive: archived files live under archive_dir_ and stay excluded.
+    load_warnings_.clear();
     return load_tasks(list_markdown_files(tasks_dir_), false);
 }
 
 std::vector<Task> MarkdownTaskRepository::find_notes() const {
+    load_warnings_.clear();
     return load_tasks(list_markdown_files(notes_dir_), true);
 }
 
 std::vector<Task> MarkdownTaskRepository::find_archived() const {
     // Archived files are nested under <archive>/<year>/<month>/, so scan deeply;
     // tasks and notes have separate archive trees and are merged here.
+    load_warnings_.clear();
     std::vector<Task> items =
         load_tasks(list_markdown_files_recursive(archive_dir_), false);
     auto notes = load_tasks(list_markdown_files_recursive(notes_archive_dir_),

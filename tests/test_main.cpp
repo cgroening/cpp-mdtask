@@ -9,6 +9,9 @@ int main() {
     sparcli::logging::set_level(SC_LOG_OFF);
 
     run_agenda_tests();
+    run_subtasks_tests();
+    run_task_presentation_tests();
+    run_finder_actions_tests();
     run_service_tests();
     run_markdown_document_tests();
     run_markdown_task_repository_tests();
