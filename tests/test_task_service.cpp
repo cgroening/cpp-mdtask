@@ -185,6 +185,50 @@ void run_service_tests() {
         CHECK(missing.error().code == ErrorCode::NOT_FOUND);
     }
 
+    // duplicate_task copies the content, resets status to open, and numbers the
+    // title; a second duplicate bumps the counter.
+    {
+        InMemoryTaskRepository repository;
+        TaskService service(repository);
+
+        const auto source = service.add_task({
+            .title = "Pay invoice", .due = ymd(2026, 6, 5),
+            .priority = Priority::HIGH,
+        });
+        CHECK(source.has_value());
+        CHECK(service.toggle_done(source->id).has_value());   // source is DONE
+
+        const auto copy = service.duplicate_task(source->id);
+        CHECK(copy.has_value());
+        CHECK(copy->title == "Pay invoice (copy)");
+        CHECK(copy->id != source->id);
+        CHECK(copy->status == Status::OPEN);          // not copied from DONE
+        CHECK(!copy->completed_at.has_value());
+        CHECK(copy->due == ymd(2026, 6, 5));
+        CHECK(copy->priority == Priority::HIGH);
+
+        const auto copy2 = service.duplicate_task(source->id);
+        CHECK(copy2.has_value());
+        CHECK(copy2->title == "Pay invoice (copy 2)");
+    }
+
+    // A note duplicates as a note; an unknown id reports NOT_FOUND.
+    {
+        InMemoryTaskRepository repository;
+        TaskService service(repository);
+
+        const auto note = service.add_task({.title = "Idea", .note = true});
+        CHECK(note.has_value());
+        const auto note_copy = service.duplicate_task(note->id);
+        CHECK(note_copy.has_value());
+        CHECK(note_copy->note);
+        CHECK(note_copy->title == "Idea (copy)");
+
+        const auto missing = service.duplicate_task("nope");
+        CHECK(!missing.has_value());
+        CHECK(missing.error().code == ErrorCode::NOT_FOUND);
+    }
+
     // set_priority updates only the priority.
     {
         InMemoryTaskRepository repository;

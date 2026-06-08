@@ -65,6 +65,16 @@ public:
      */
     [[nodiscard]] Result<Task> update_task(Task task);
 
+    /**
+     * Creates a copy of an existing task or note: the content fields are copied,
+     * the title gets a numbered " (copy)" suffix, and a fresh id, OPEN status,
+     * order and creation date are assigned. A note duplicates as a note.
+     *
+     * @param id Id of the task/note to duplicate.
+     * @return The created duplicate, or a NOT_FOUND error.
+     */
+    [[nodiscard]] Result<Task> duplicate_task(const std::string& id);
+
     /** Returns all tasks (active set, notes excluded). */
     [[nodiscard]] std::vector<Task> all_tasks() const;
 

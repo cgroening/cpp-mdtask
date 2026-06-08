@@ -5,6 +5,7 @@
 void run_agenda_tests();
 void run_subtasks_tests();
 void run_suggestion_tests();
+void run_duplicate_tests();
 void run_task_presentation_tests();
 void run_finder_actions_tests();
 void run_service_tests();

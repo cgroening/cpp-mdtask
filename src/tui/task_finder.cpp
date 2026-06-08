@@ -644,6 +644,7 @@ void run_task_finder(TaskService& service, const Config& config) {
             shortcuts.on_return(sparcli::key_char(' '), ACT_TOGGLE_SELECT,
                                 "select")
                      .on_return(sparcli::key_char('e'), ACT_EDIT_FILE, "edit")
+                     .on_return(sparcli::key_char('c'), ACT_DUPLICATE, "copy")
                      .on_return(sparcli::key_char('n'), ACT_NEW, "new")
                      .on_return(sparcli::key_char('N'), ACT_NEW_OTHER,
                                 "new task")
@@ -656,6 +657,7 @@ void run_task_finder(TaskService& service, const Config& config) {
             shortcuts.on_return(sparcli::key_char(' '), ACT_TOGGLE_SELECT,
                                 "select")
                      .on_return(sparcli::key_char('e'), ACT_EDIT_FILE, "edit")
+                     .on_return(sparcli::key_char('c'), ACT_DUPLICATE, "copy")
                      .on_return(sparcli::key_char('r'), ACT_TOGGLE_SUGGEST,
                                 "next")
                      .on_return(sparcli::key_char('R'), ACT_FOCUS_SUGGEST)
@@ -865,6 +867,17 @@ void run_task_finder(TaskService& service, const Config& config) {
                     "Edited file could not be reloaded (invalid front matter?) "
                     "- left unchanged."
                 );
+            }
+            continue;
+        }
+
+        // Duplicate the cursor item and land the cursor on the new copy.
+        if(action == ACT_DUPLICATE) {
+            const auto copy = service.duplicate_task(task.id);
+            if(copy) {
+                focus = row_id(copy->id);
+            } else {
+                report(copy);
             }
             continue;
         }

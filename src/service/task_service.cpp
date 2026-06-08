@@ -1,6 +1,7 @@
 #include "service/task_service.hpp"
 
 #include "domain/agenda.hpp"
+#include "domain/duplicate.hpp"
 #include "util/date.hpp"
 
 #include <sparcli.hpp>
@@ -141,6 +142,33 @@ Result<Task> TaskService::update_task(Task task) {
     }
     repository_.update(task);
     return task;
+}
+
+Result<Task> TaskService::duplicate_task(const std::string& id) {
+    const auto source = repository_.find_by_id(id);
+    if(!source) {
+        return std::unexpected(task_not_found_error(id));
+    }
+
+    // Unique, numbered title among the same kind of item (tasks vs notes).
+    std::vector<std::string> titles;
+    const auto siblings =
+        source->note ? repository_.find_notes() : repository_.find_all();
+    for(const auto& item : siblings) {
+        titles.push_back(item.title);
+    }
+
+    // add_task assigns a fresh id, OPEN status, a trailing order and today's
+    // creation date, and normalizes a note - so only the content carries over.
+    return add_task({
+        .title       = next_copy_title(source->title, titles),
+        .description = source->description,
+        .due         = source->due,
+        .priority    = source->priority,
+        .someday     = source->someday,
+        .project     = source->project,
+        .note        = source->note,
+    });
 }
 
 std::vector<Task> TaskService::all_tasks() const {

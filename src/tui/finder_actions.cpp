@@ -28,6 +28,7 @@ std::vector<HelpItem> help_entries() {
         row("t", "pick a due date (calendar)"),
         row("+ / -", "shift the due date by one day"),
         row("a", "archive"),
+        row("c", "duplicate the item (adds a numbered (copy) suffix)"),
         row("Delete", "delete permanently"),
         row("n / N", "new item / new opposite type"),
         row("Alt+up/down", "reorder (Alt+Shift = to top / bottom)"),

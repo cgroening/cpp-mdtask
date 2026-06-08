@@ -70,6 +70,8 @@ Modal (vim-style): the finder starts in normal mode.
 - `t` – pick a due date from a calendar.
 - `+` / `-` – shift the due date by one day (the cursor stays on the task).
 - `a` – archive the task.
+- `c` – duplicate the task/note (title gets a numbered `(copy)` suffix; the
+  cursor lands on the new copy).
 - `n` – add a new task (`N` adds the opposite item type).
 - `Space` – mark/unmark the task; `d`, `p`, `a`, `t`, `+`/`-` and `Delete` then
   apply to every marked task at once.

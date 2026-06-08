@@ -11,6 +11,7 @@ int main() {
     run_agenda_tests();
     run_subtasks_tests();
     run_suggestion_tests();
+    run_duplicate_tests();
     run_task_presentation_tests();
     run_finder_actions_tests();
     run_service_tests();
