@@ -450,8 +450,9 @@ std::optional<FormResult> run_task_form(
     }
     const sparcli::Rendered header = presentation::app_header(head);
 
-    // A note's grid is single-column; a task's title/description span all five.
-    const int wide_span = is_note ? 1 : 5;
+    // A note's grid is single-column; a task's grid is three columns, so the
+    // title/category/description rows span all three.
+    const int wide_span = is_note ? 1 : 3;
     constexpr int ACT_EDIT_RECURRENCE = 1;
     constexpr int ACT_SAVE = 2;
 
@@ -499,68 +500,50 @@ std::optional<FormResult> run_task_form(
              .required = true}
         );
 
-        // Task-only fields: priority, due, someday, status.
-        int priority_id = -1;
-        int due_id = -1;
-        int someday_id = -1;
-        int status_id = -1;
-        if(!is_note) {
-            form.row_begin();
-            priority_id = form.add_select(
-                "Priority", PRIORITY_CHOICES, priority_to_index(state.priority),
-                {.width_mode = SC_FWIDTH_PCT, .width = 20}
-            );
-            form.set_choice_styles(priority_id, priority_choice_styles());
-            due_id = form.add_date(
-                "Due", due_initial,
-                {.width_mode = SC_FWIDTH_PCT, .width = 20, .date_optional = true,
-                 .help = "enter picks a date, del clears it",
-                 .value_style = due_cell_style}
-            );
-            someday_id = form.add_bool(
-                "Someday", state.someday,
-                {.width_mode = SC_FWIDTH_PCT, .width = 20}
-            );
-            status_id = form.add_select(
-                "Status", STATUS_CHOICES, status_to_index(state.status),
-                {.width_mode = SC_FWIDTH_PCT, .width = 20}
-            );
-            form.set_choice_styles(status_id, status_choice_styles());
-        }
-
-        // In the note layout the checkbox gets its own full-width row; on the
-        // task row it is the fifth column (PCT to line up with the other four).
-        sparcli::FieldOpts note_opts{};
-        if(is_note) {
-            form.row_begin();
-            note_opts.width_mode = SC_FWIDTH_AUTO;
-        } else {
-            note_opts.width_mode = SC_FWIDTH_PCT;
-            note_opts.width = 20;
-        }
-        const int note_id = form.add_bool("Note", state.note, note_opts);
-
-        // Category dropdown (task only): the configured long-form labels, with
-        // "-" (no category) always first.
+        // Category dropdown (task only): its own full-width row under the
+        // title; the configured long-form labels with "-" (no category) first.
         int category_id = -1;
         const std::vector<std::string> category_choices =
             category_labels(config.categories);
         if(!is_note) {
             form.row_begin();
-            // Span two columns (≈40%) rather than sizing a single column: a
-            // single-column field would override column 0's width and push the
-            // Priority row's last cell (Note) onto a second line.
             category_id = form.add_select(
                 "Category", category_choices,
                 category_to_index(config.categories, state.category),
-                {.width_mode = SC_FWIDTH_AUTO, .col_span = 2}
+                {.width_mode = SC_FWIDTH_AUTO, .col_span = wide_span}
             );
         }
 
-        // A single, display-only Repeat summary (task only): read-only and not
-        // selectable, so the cursor skips it and the wizard (`r`) is the only
-        // way to change it.
+        // Task-only fields laid out as two three-column rows that share the
+        // grid columns (so each column keeps a single width across both rows):
+        //   Priority(30) | Status(40) | Note(30)
+        //   Due(30)      | Repeat(40) | Someday(30)
+        int priority_id = -1;
+        int due_id = -1;
+        int someday_id = -1;
+        int status_id = -1;
+        int note_id = -1;
         if(!is_note) {
+            form.row_begin();
+            priority_id = form.add_select(
+                "Priority", PRIORITY_CHOICES, priority_to_index(state.priority),
+                {.width_mode = SC_FWIDTH_PCT, .width = 30}
+            );
+            form.set_choice_styles(priority_id, priority_choice_styles());
+            status_id = form.add_select(
+                "Status", STATUS_CHOICES, status_to_index(state.status),
+                {.width_mode = SC_FWIDTH_PCT, .width = 40}
+            );
+            form.set_choice_styles(status_id, status_choice_styles());
+            note_id = form.add_bool(
+                "Note", state.note,
+                {.width_mode = SC_FWIDTH_PCT, .width = 30}
+            );
+
+            // The Repeat summary is read-only (edited only via the `r` wizard).
+            // It stays focusable (not not_selectable) because it sits between
+            // Due and Someday: a non-selectable middle cell would break Right
+            // navigation to Someday. Read-only already makes Enter a no-op.
             std::string repeat_summary = "none";
             if(state.recurrence) {
                 repeat_summary = format_recurrence(*state.recurrence);
@@ -569,12 +552,27 @@ std::optional<FormResult> run_task_form(
                 }
             }
             form.row_begin();
+            due_id = form.add_date(
+                "Due", due_initial,
+                {.width_mode = SC_FWIDTH_PCT, .width = 30, .date_optional = true,
+                 .help = "enter picks a date, del clears it",
+                 .value_style = due_cell_style}
+            );
             static_cast<void>(form.add_text(
                 "Repeat", repeat_summary,
-                {.width_mode = SC_FWIDTH_AUTO, .col_span = wide_span,
-                 .help = "press r to edit recurrence",
-                 .read_only = true, .not_selectable = true}
+                {.width_mode = SC_FWIDTH_PCT, .width = 40,
+                 .help = "press r to edit recurrence", .read_only = true}
             ));
+            someday_id = form.add_bool(
+                "Someday", state.someday,
+                {.width_mode = SC_FWIDTH_PCT, .width = 30}
+            );
+        } else {
+            // Note layout: the checkbox gets its own full-width row.
+            form.row_begin();
+            note_id = form.add_bool(
+                "Note", state.note, {.width_mode = SC_FWIDTH_AUTO}
+            );
         }
 
         form.row_begin();
