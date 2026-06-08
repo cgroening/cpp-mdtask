@@ -216,19 +216,10 @@ std::string format_relative_due(
     std::chrono::year_month_day due, std::chrono::year_month_day today
 ) {
     const int days = days_between(today, due);
-    if(days == 0) {
-        return "today";
-    }
-    if(days == 1) {
-        return "tomorrow";
-    }
-    if(days == -1) {
-        return "yesterday";
-    }
     if(days > 0) {
-        return std::format("in {}d", days);
+        return std::format("+{}", days);   // future: +1, +2, ...
     }
-    return std::format("{}d overdue", -days);
+    return std::format("{}", days);        // today: 0; overdue: -1, -2, ...
 }
 
 sparcli::TextStyle relative_due_style(
@@ -238,10 +229,10 @@ sparcli::TextStyle relative_due_style(
     if(days < 0) {
         return sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::red());
     }
-    if(days <= 1) {
+    if(days == 0) {
         return sparcli::style(SC_TEXT_ATTR_NONE, sparcli::palette::yellow());
     }
-    return sparcli::style(SC_TEXT_ATTR_DIM);
+    return sparcli::style(SC_TEXT_ATTR_DIM);   // future days in gray
 }
 
 sparcli::Rendered app_header(const sparcli::Text& content) {

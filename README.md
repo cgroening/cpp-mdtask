@@ -73,8 +73,8 @@ Modal (vim-style): the finder starts in normal mode.
 
 The first column shows a status glyph; the row also carries a subtask
 progress count (`2/5`, from `- [ ]`/`- [x]` checkboxes in the body) and a
-relative-due hint (`in 3d`, `2d overdue`). Section headers show
-`(open: x; done: y)`.
+signed relative-due offset (`0` today in yellow, `+3` future in gray, `-2`
+overdue in red). Section headers show `(open: x; done: y)`.
 
 ## CLI commands
 

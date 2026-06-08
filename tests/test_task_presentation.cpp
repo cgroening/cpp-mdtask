@@ -22,17 +22,17 @@ std::chrono::year_month_day ymd(int year, unsigned month, unsigned day) {
 void run_task_presentation_tests() {
     const auto today = ymd(2026, 6, 8);
 
-    // Relative-due wording across the boundary cases.
+    // Relative-due offsets: 0 today, +N future, -N overdue.
     {
-        CHECK(presentation::format_relative_due(today, today) == "today");
+        CHECK(presentation::format_relative_due(today, today) == "0");
         CHECK(presentation::format_relative_due(ymd(2026, 6, 9), today)
-              == "tomorrow");
+              == "+1");
         CHECK(presentation::format_relative_due(ymd(2026, 6, 7), today)
-              == "yesterday");
+              == "-1");
         CHECK(presentation::format_relative_due(ymd(2026, 6, 11), today)
-              == "in 3d");
+              == "+3");
         CHECK(presentation::format_relative_due(ymd(2026, 6, 6), today)
-              == "2d overdue");
+              == "-2");
     }
 
     // The section header carries the open/done suffix (cancelled counts done).
