@@ -26,3 +26,24 @@ editor = "nvim"
 
 # Minimum level for the colored stderr log: debug, info, warn, error, off.
 log_level = "warn"
+
+# Task categories shown as a dropdown in the task form and as a colored badge
+# in the agenda. Each entry has a long-form `name` (shown in the dropdown), a
+# `short` badge text (shown in the agenda), and `fg`/`bg` colors. Colors accept
+# a name ("white", "blue", "accent", ...) or a #RRGGBB hex value.
+#
+# "-" (no category) and "Project" are always available even when omitted here;
+# list "Project" explicitly to give it your own short form and colors. Define
+# your own categories with array-of-tables blocks:
+#
+# [[categories]]
+# name  = "home"
+# short = "⌂"
+# fg    = "#ffffff"
+# bg    = "#3b82f6"
+#
+# [[categories]]
+# name  = "work"
+# short = "W"
+# fg    = "black"
+# bg    = "yellow"

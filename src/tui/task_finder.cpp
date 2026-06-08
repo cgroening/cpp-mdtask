@@ -36,10 +36,11 @@ enum class Layout { TASKS, NOTES, ARCHIVE, PLACEHOLDER };
 // variants prepend an empty-header marker column, shown only while a multi-
 // selection is active.
 constexpr const char* TASK_HEADERS[]   = {"\xe2\x97\x8c", "!", "\xe2\x98\x91",
-                                          "Task", "Due/Done", "\xe2\x86\x92"};
+                                          "@", "Task", "Due/Done",
+                                          "\xe2\x86\x92"};
 constexpr const char* TASK_HEADERS_SEL[] = {"", "\xe2\x97\x8c", "!",
-                                            "\xe2\x98\x91", "Task", "Due/Done",
-                                            "\xe2\x86\x92"};
+                                            "\xe2\x98\x91", "@", "Task",
+                                            "Due/Done", "\xe2\x86\x92"};
 constexpr const char* NOTE_HEADERS[]   = {"Task"};
 constexpr const char* NOTE_HEADERS_SEL[] = {"", "Task"};
 constexpr const char* ARCHIVE_HEADERS[] = {"\xe2\x9c\x8e", "!", "\xe2\x97\x8c",
@@ -62,8 +63,8 @@ ColumnSpec column_spec(Layout layout, bool has_selection) {
         case Layout::PLACEHOLDER: return {PLACEHOLDER_HEADERS, 1, 0};
         case Layout::TASKS:       break;
     }
-    return has_selection ? ColumnSpec{TASK_HEADERS_SEL, 7, 4}
-                         : ColumnSpec{TASK_HEADERS, 6, 3};
+    return has_selection ? ColumnSpec{TASK_HEADERS_SEL, 8, 5}
+                         : ColumnSpec{TASK_HEADERS, 7, 4};
 }
 
 /** Builds an Alt(+Shift)+named-key chord for the reorder shortcuts. */
@@ -108,6 +109,21 @@ std::vector<std::optional<std::string>> row_task_ids(const RowIndex& rows) {
 /** A multi-selected row is tinted across all of its cells. */
 using Selection = std::unordered_set<std::string>;
 
+/** The configured category for a task's label, or nullptr for none/unknown. */
+const CategoryDef* find_category(
+    const std::vector<CategoryDef>& categories, const std::string& name
+) {
+    if(name.empty()) {
+        return nullptr;
+    }
+    for(const auto& category : categories) {
+        if(category.name == name) {
+            return &category;
+        }
+    }
+    return nullptr;
+}
+
 /** Adds one row in the given `layout` and records it in `rows` at `index`. */
 void add_row(
     sparcli::Fuzzy& finder,
@@ -117,7 +133,8 @@ void add_row(
     Layout layout,
     RowIndex& rows,
     std::size_t& index,
-    const Selection& selected
+    const Selection& selected,
+    const std::vector<CategoryDef>& categories
 ) {
     const bool overdue =
         task.due && *task.due < today && !is_terminal(task.status);
@@ -193,10 +210,21 @@ void add_row(
                 ? "\xe2\x86\xbb " + task.title   // ↻
                 : task.title;
 
+            // Category badge: the configured short form in its own colors,
+            // blank for "no category".
+            const CategoryDef* category =
+                find_category(categories, task.category);
+            const std::string cat_text =
+                category ? category->shortform : "";
+            const sparcli::TextStyle cat_style = category
+                ? sparcli::style(SC_TEXT_ATTR_NONE, category->fg, category->bg)
+                : sparcli::style(SC_TEXT_ATTR_NONE);
+
             fields = {
                 presentation::status_symbol(task, overdue),
                 presentation::priority_symbol(task.priority),
                 sub_text,
+                cat_text,
                 title_text,
                 due_done_text,
                 rel_text,
@@ -205,6 +233,7 @@ void add_row(
                 presentation::status_style(task, overdue),
                 presentation::priority_style(task.priority),
                 sub_style,
+                cat_style,
                 presentation::title_style(task),
                 due_done_style,
                 rel_style,
@@ -250,7 +279,8 @@ RowIndex populate(
     std::chrono::year_month_day today,
     DateFormat format,
     Language language,
-    const Selection& selected
+    const Selection& selected,
+    const std::vector<CategoryDef>& categories
 ) {
     RowIndex rows;
     std::size_t index = 0;
@@ -266,7 +296,7 @@ RowIndex populate(
         for(const auto& task : section.tasks) {
             add_row(
                 finder, task, today, format, Layout::TASKS, rows, index,
-                selected
+                selected, categories
             );
         }
     }
@@ -285,7 +315,8 @@ RowIndex populate_notes(
     std::size_t index = 0;
     for(const auto& note : notes) {
         add_row(
-            finder, note, today, format, Layout::NOTES, rows, index, selected
+            finder, note, today, format, Layout::NOTES, rows, index, selected,
+            {}
         );
     }
     return rows;
@@ -314,7 +345,8 @@ RowIndex populate_archive(
 
         for(const auto& task : group.tasks) {
             add_row(
-                finder, task, today, format, Layout::ARCHIVE, rows, index, none
+                finder, task, today, format, Layout::ARCHIVE, rows, index, none,
+                {}
             );
         }
     }
@@ -802,7 +834,7 @@ void run_task_finder(TaskService& service, const Config& config) {
             const auto agenda = build_agenda(items, today);
             rows = populate(
                 finder, agenda, today, config.date_format, config.language,
-                selected
+                selected, config.categories
             );
             for(const auto& section : agenda) {
                 jump_targets.push_back({

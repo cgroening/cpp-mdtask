@@ -69,6 +69,7 @@ void normalize_note(Task& task) {
     task.status = Status::OPEN;
     task.completed_at.reset();
     task.project.clear();
+    task.category.clear();
     task.recurrence.reset();
 }
 
@@ -110,6 +111,7 @@ Result<Task> TaskService::add_task(const NewTask& fields) {
         .note        = fields.note,
         .created     = today(),
         .project     = fields.project,
+        .category    = fields.category,
         .recurrence  = fields.recurrence,
     };
     if(task.note) {

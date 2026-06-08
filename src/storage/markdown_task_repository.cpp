@@ -159,6 +159,9 @@ serde::Value task_to_frontmatter(const Task& task) {
     if(!task.project.empty()) {
         frontmatter.set("project", serde::Value::string(task.project));
     }
+    if(!task.category.empty()) {
+        frontmatter.set("category", serde::Value::string(task.category));
+    }
     if(task.recurrence) {
         frontmatter.set(
             "repeat",
@@ -218,6 +221,7 @@ Task document_to_task(const MarkdownDocument& document, const fs::path& path) {
     task.created =
         parse_iso_date(string_or(frontmatter, "created", "")).value_or(today());
     task.project = string_or(frontmatter, "project", "");
+    task.category = string_or(frontmatter, "category", "");
     task.recurrence = parse_recurrence(
         string_or(frontmatter, "repeat", ""),
         string_or(frontmatter, "repeat_from", "")

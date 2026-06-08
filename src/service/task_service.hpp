@@ -24,6 +24,7 @@ struct NewTask {
     Priority priority = Priority::NONE;               /**< Priority bucket. */
     bool someday = false;                             /**< Mark as someday. */
     std::string project;                              /**< Optional project. */
+    std::string category;                             /**< Optional category. */
     bool note = false;                                /**< Create as a note. */
     std::optional<RecurrenceRule> recurrence;         /**< Optional recurrence. */
 };

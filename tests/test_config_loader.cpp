@@ -62,6 +62,14 @@ void run_config_loader_tests() {
         CHECK(config->language == Language::ENGLISH);
         // The archive defaults to a subfolder of the resolved tasks dir.
         CHECK(config->archive_dir == config->tasks_dir / "archive");
+        // The two reserved categories always exist, with "-" first.
+        CHECK(config->categories.size() >= 2);
+        CHECK(config->categories.front().name == "-");
+        bool has_project = false;
+        for(const auto& category : config->categories) {
+            if(category.name == "Project") { has_project = true; }
+        }
+        CHECK(has_project);
     }
 
     // Recognized keys in the file override the defaults.
@@ -129,6 +137,48 @@ void run_config_loader_tests() {
         const auto config = load_config();
         CHECK(!config.has_value());
         CHECK(config.error().code == ErrorCode::CONFIG_INVALID);
+    }
+
+    // Configured categories parse with name/short/colors (name or #hex); "-" is
+    // forced to the front and "Project" is injected when omitted.
+    {
+        write_config(
+            "[[categories]]\n"
+            "name = \"home\"\n"
+            "short = \"H\"\n"
+            "fg = \"white\"\n"
+            "bg = \"#3b82f6\"\n"
+        );
+        const auto config = load_config();
+        CHECK(config.has_value());
+        CHECK(config->categories.front().name == "-");
+        const CategoryDef* home = nullptr;
+        bool has_project = false;
+        for(const auto& category : config->categories) {
+            if(category.name == "home") { home = &category; }
+            if(category.name == "Project") { has_project = true; }
+        }
+        CHECK(home != nullptr);
+        CHECK(home->shortform == "H");
+        // "#3b82f6" -> RGB mode (index -1) with the parsed channels.
+        CHECK(home->bg.index == -1);
+        CHECK(home->bg.r == 59);
+        CHECK(home->bg.g == 130);
+        CHECK(home->bg.b == 246);
+        CHECK(has_project);
+    }
+
+    // An unknown category color is rejected with a hint.
+    {
+        write_config(
+            "[[categories]]\n"
+            "name = \"bad\"\n"
+            "fg = \"notacolor\"\n"
+        );
+        const auto config = load_config();
+        CHECK(!config.has_value());
+        CHECK(config.error().code == ErrorCode::CONFIG_INVALID);
+        CHECK(!config.error().hint.empty());
     }
 
     remove_config();

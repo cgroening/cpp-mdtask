@@ -217,6 +217,27 @@ void run_markdown_task_repository_tests() {
         CHECK(!repository.find_by_id("id000000")->recurrence.has_value());
     }
 
+    // The category round-trips; a file without the key loads as empty.
+    {
+        fs::remove_all(dir, ec);
+        MarkdownTaskRepository repository(
+            tasks_dir, notes_dir, archive_dir, notes_archive_dir
+        );
+
+        Task tagged = sample_task();
+        tagged.category = "work";
+        repository.save(tagged);
+        const auto loaded = repository.find_by_id("id000000");
+        CHECK(loaded.has_value());
+        CHECK(loaded->category == "work");
+
+        // Clearing the category removes the key; it reads back empty.
+        Task cleared = sample_task();
+        cleared.category.clear();
+        repository.update(cleared);
+        CHECK(repository.find_by_id("id000000")->category.empty());
+    }
+
     // remove deletes an active file and an archived file.
     {
         fs::remove_all(dir, ec);

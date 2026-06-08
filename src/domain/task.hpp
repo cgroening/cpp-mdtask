@@ -80,6 +80,9 @@ struct Task {
     /** Owning project's id; empty means the task has no project. */
     std::string project;
 
+    /** Category label (matches a configured CategoryDef); empty = none ("-"). */
+    std::string category;
+
     /** Recurrence rule; empty means the task does not repeat. */
     std::optional<RecurrenceRule> recurrence;
 };

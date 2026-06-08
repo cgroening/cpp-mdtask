@@ -6,10 +6,11 @@
 - [x] **Open the whole task `.md` file in nvim from the finder.**
 - [x] **Duplication of tasks and notes** for quicker creation of similar tasks
 - [x] **Recurring tasks** (`repeat: daily/weekly/...`). A done occurrence rolls the same task forward to its next due date (every x days/weeks/months or on specific week days) instead of leaving the active set; the schedule basis is per task (`repeat_from: due` or `completion`). The Recurring view shows upcoming occurrences for the current and next week (at least the next one).
-- [ ] **Task categories** to group and filter tasks by a free-form label (e.g. `@home`, `work`, `errands`), stored in the front matter and usable by the v0.2 filter and search. (In v1.0, once project management exists, a task can additionally be assigned to a specific project from there.)
+- [x] **Task categories** to group and filter tasks by a free-form label (e.g. `@home`, `work`, `errands`), stored in the front matter and usable by the v0.2 filter and search. (In v1.0, once project management exists, a task can additionally be assigned to a specific project from there.)
 
 ## v0.2 – Search, filter and review
 
+- [ ] **Refactored Code** to follow clean code principles for better maintainability
 - [ ] **Filtering tasks** to only show tasks with specific priority, status, category etc.
 - [ ] **Sort within a section by priority** in addition or as an alternative to the manual `order` (e.g. a config switch or a secondary sort key in `domain/agenda.cpp::section_less`).
 - [ ] **Full-text search over the body**, not just titles (the finder filter `i` currently matches the title column only) in a separate view.

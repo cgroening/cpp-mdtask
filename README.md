@@ -147,7 +147,14 @@ Optional TOML at `$XDG_CONFIG_HOME/mdtask/config.toml`; see
 `archive_dir`, `date_format` (`dmy`/`iso`), `language` (`english`/`german`, for
 the weekday names in section headers), `editor`, `log_level`. Any key can be
 overridden by an `MDTASK_`-prefixed environment variable, e.g.
-`MDTASK_TASKS_DIR`.
+`MDTASK_TASKS_DIR`. Run `mdtask config` to print the resolved values.
+
+Categories are a configured dropdown. Define them as `[[categories]]`
+array-of-tables, each with a long-form `name` (shown in the task form), a
+`short` badge text (shown in the agenda), and `fg`/`bg` colors (a color name or
+`#RRGGBB`). "-" (no category) and "Project" are always available; the latter is
+reserved for assigning a project once project management lands. The chosen
+category is stored as `category:` in the task's front matter.
 
 Try it with the bundled sample tasks:
 

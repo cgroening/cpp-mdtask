@@ -74,6 +74,14 @@ int ConfigCommand::run(const sparcli::Args& args) {
         "Editor",
         config_.editor.empty() ? "(EDITOR, then nvim)" : config_.editor
     );
+    std::string category_list;
+    for(const auto& category : config_.categories) {
+        if(!category_list.empty()) {
+            category_list += ", ";
+        }
+        category_list += category.name;
+    }
+    values.add("Categories", category_list);
     values.add(
         "Log file",
         config_.log_file.empty() ? "(disabled)" : config_.log_file.string()

@@ -189,8 +189,45 @@ struct FormResult {
     bool someday = false;
     Status status = Status::OPEN;
     bool note = false;
+    std::string category;
     std::optional<RecurrenceRule> recurrence;
 };
+
+/** The dropdown's long-form labels (index 0 is always the "-" / none entry). */
+std::vector<std::string> category_labels(
+    const std::vector<CategoryDef>& categories
+) {
+    std::vector<std::string> labels;
+    labels.reserve(categories.size());
+    for(const auto& category : categories) {
+        labels.push_back(category.name);
+    }
+    return labels;
+}
+
+/** Select index for a stored category name; an unknown/empty name maps to 0. */
+std::size_t category_to_index(
+    const std::vector<CategoryDef>& categories, const std::string& name
+) {
+    if(!name.empty()) {
+        for(std::size_t i = 0; i < categories.size(); ++i) {
+            if(categories[i].name == name) {
+                return i;
+            }
+        }
+    }
+    return 0;
+}
+
+/** Stored category name for a select index; the "-" entry maps back to "". */
+std::string category_from_index(
+    const std::vector<CategoryDef>& categories, std::size_t index
+) {
+    if(index >= categories.size() || categories[index].name == "-") {
+        return {};
+    }
+    return categories[index].name;
+}
 
 /** Outcome of the recurrence wizard (changed=false when the user cancels). */
 struct RecurChoice {
@@ -336,6 +373,7 @@ std::optional<FormResult> run_task_form(
         state.priority = existing->priority;
         state.someday = existing->someday;
         state.status = existing->status;
+        state.category = existing->category;
         state.recurrence = existing->recurrence;
     }
 
@@ -453,6 +491,23 @@ std::optional<FormResult> run_task_form(
         }
         const int note_id = form.add_bool("Note", state.note, note_opts);
 
+        // Category dropdown (task only): the configured long-form labels, with
+        // "-" (no category) always first.
+        int category_id = -1;
+        const std::vector<std::string> category_choices =
+            category_labels(config.categories);
+        if(!is_note) {
+            form.row_begin();
+            // Span two columns (≈40%) rather than sizing a single column: a
+            // single-column field would override column 0's width and push the
+            // Priority row's last cell (Note) onto a second line.
+            category_id = form.add_select(
+                "Category", category_choices,
+                category_to_index(config.categories, state.category),
+                {.width_mode = SC_FWIDTH_AUTO, .col_span = 2}
+            );
+        }
+
         // A single, display-only Repeat summary (task only): read-only and not
         // selectable, so the cursor skips it and the wizard (`r`) is the only
         // way to change it.
@@ -494,6 +549,9 @@ std::optional<FormResult> run_task_form(
             state.priority = priority_from_index(form.get_choice(priority_id));
             state.someday = form.get_bool(someday_id);
             state.status = status_from_index(form.get_choice(status_id));
+            state.category = category_from_index(
+                config.categories, form.get_choice(category_id)
+            );
             const auto picked = form.get_date(due_id);
             state.due = (picked && !sparcli::date_empty(*picked))
                 ? from_tm(*picked)
@@ -541,6 +599,7 @@ std::optional<Task> run_new_task_form(
         .due         = fields->due,
         .priority    = fields->priority,
         .someday     = fields->someday,
+        .category    = fields->category,
         .note        = fields->note,
         .recurrence  = fields->recurrence,
     });
@@ -574,6 +633,7 @@ std::optional<Task> run_edit_task_form(
     updated.someday = fields->someday;
     updated.status = fields->status;
     updated.note = fields->note;
+    updated.category = fields->category;
     updated.recurrence = fields->recurrence;
 
     const auto saved = service.update_task(updated);

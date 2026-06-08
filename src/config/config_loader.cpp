@@ -5,13 +5,49 @@
 #include <app/sparcli_config.hpp>
 #include <sparcli.hpp>
 
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <string>
+#include <vector>
 
 namespace mdtask {
 
 namespace {
+
+/** The two categories that must always exist, with their default labels. */
+constexpr const char* NONE_CATEGORY = "-";
+constexpr const char* PROJECT_CATEGORY = "Project";
+
+/**
+ * Resolves a config color token into a Color: either a `#RRGGBB` hex literal or
+ * a name accepted by sparcli (the eight ANSI names and the named palette).
+ *
+ * @return The color, or std::nullopt when the token is neither valid hex nor a
+ *         known color name.
+ */
+std::optional<sparcli::Color> parse_color(const std::string& token) {
+    if(token.empty()) {
+        return sparcli::Color{};   // zero-init = "use the default"
+    }
+    if(token.size() == 7 && token.front() == '#') {
+        std::uint8_t rgb[3] = {0, 0, 0};
+        for(int i = 0; i < 3; ++i) {
+            const std::string byte = token.substr(1 + i * 2, 2);
+            for(const char digit : byte) {
+                if(!std::isxdigit(static_cast<unsigned char>(digit))) {
+                    return std::nullopt;
+                }
+            }
+            rgb[i] = static_cast<std::uint8_t>(std::stoi(byte, nullptr, 16));
+        }
+        return sparcli::rgb(rgb[0], rgb[1], rgb[2]);
+    }
+    return sparcli::color_by_name(token);
+}
 
 /** Maps the textual log levels accepted in the config file to sparcli's. */
 const std::map<std::string, ScLogLevel, std::less<>> LOG_LEVELS = {
@@ -85,6 +121,80 @@ Result<sparcli::Config> build_layered_config() {
     return config;
 }
 
+/** Built-in categories used when the config file defines none. */
+std::vector<CategoryDef> default_categories() {
+    return {
+        {.name = NONE_CATEGORY},
+        {.name = PROJECT_CATEGORY, .shortform = "P",
+         .fg = sparcli::palette::purple()},
+    };
+}
+
+/**
+ * Reads the `categories` array from the layered config and resolves each
+ * entry's colors. Guarantees that "-" is present at index 0 and "Project"
+ * exists somewhere in the list (both injected when missing).
+ *
+ * @return The resolved categories, or a CONFIG_INVALID error on a bad color.
+ */
+Result<std::vector<CategoryDef>> load_categories(const sparcli::Config& layered) {
+    const sparcli::serde::View array = layered.get("categories");
+    std::vector<CategoryDef> categories;
+    for(std::size_t i = 0; i < array.size(); ++i) {
+        const sparcli::serde::View entry = array.at(i);
+        const auto name = entry.get("name").as_string();
+        if(!name || name->empty()) {
+            continue;   // a category without a name is meaningless; skip it
+        }
+        CategoryDef def;
+        def.name = std::string(*name);
+        if(const auto s = entry.get("short").as_string()) {
+            def.shortform = std::string(*s);
+        }
+        const std::string fg_token =
+            std::string(entry.get("fg").as_string().value_or(""));
+        const std::string bg_token =
+            std::string(entry.get("bg").as_string().value_or(""));
+        const auto fg = parse_color(fg_token);
+        const auto bg = parse_color(bg_token);
+        if(!fg || !bg) {
+            return std::unexpected(config_error(
+                "Invalid category color '" +
+                    (!fg ? fg_token : bg_token) + "' for '" + def.name + "'",
+                "Use a color name (e.g. blue) or a #RRGGBB hex value"
+            ));
+        }
+        def.fg = *fg;
+        def.bg = *bg;
+        categories.push_back(std::move(def));
+    }
+
+    // Nothing configured: fall back to the built-in defaults.
+    if(categories.empty()) {
+        return default_categories();
+    }
+
+    // Enforce the two reserved categories: "-" first, "Project" present.
+    const auto has = [&](const char* name) {
+        return std::ranges::any_of(categories, [&](const CategoryDef& c) {
+            return c.name == name;
+        });
+    };
+    if(categories.front().name != NONE_CATEGORY) {
+        std::erase_if(categories, [](const CategoryDef& c) {
+            return c.name == NONE_CATEGORY;
+        });
+        categories.insert(categories.begin(), {.name = NONE_CATEGORY});
+    }
+    if(!has(PROJECT_CATEGORY)) {
+        categories.push_back(
+            {.name = PROJECT_CATEGORY, .shortform = "P",
+             .fg = sparcli::palette::purple()}
+        );
+    }
+    return categories;
+}
+
 }  // namespace
 
 Result<Config> load_config() {
@@ -140,6 +250,11 @@ Result<Config> load_config() {
         notes_archive_dir = notes_dir / "archive";
     }
 
+    auto categories = load_categories(*layered);
+    if(!categories) {
+        return std::unexpected(categories.error());
+    }
+
     return Config{
         .log_level          = level->second,
         .tasks_dir          = tasks_dir,
@@ -150,6 +265,7 @@ Result<Config> load_config() {
         .date_format        = format->second,
         .language           = language->second,
         .editor             = layered->get_string("editor"),
+        .categories         = std::move(*categories),
     };
 }
 
