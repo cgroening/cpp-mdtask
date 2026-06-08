@@ -91,6 +91,14 @@ std::string section_label(
     if(day == shift_days(today, 1)) {
         return "Tomorrow - " + labelled;
     }
+    // Days in next week (the Monday-started week after this one) read as "Next
+    // Monday" / "Nächster Montag" so they stand apart from this week's days.
+    const auto next_week_start = shift_days(end_of_next_week(today), -6);
+    if(day >= next_week_start) {
+        const std::string prefix =
+            language == Language::GERMAN ? "N\xc3\xa4""chster " : "Next ";
+        return prefix + labelled;
+    }
     return labelled;
 }
 

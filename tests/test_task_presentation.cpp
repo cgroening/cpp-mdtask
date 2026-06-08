@@ -85,12 +85,25 @@ void run_task_presentation_tests() {
                   today_section, today, DateFormat::DMY, Language::GERMAN
               ) == "Today - Montag, 08.06.2026 (open: 1; done: 0)");
 
+        // A day later this week carries no extra prefix.
         AgendaSection later;
         later.kind = SectionKind::DATED;
-        later.day = ymd(2026, 6, 10);   // a Wednesday
+        later.day = ymd(2026, 6, 10);   // a Wednesday, this week
         later.tasks = {task};
         CHECK(presentation::section_header(
                   later, today, DateFormat::ISO, Language::GERMAN
               ) == "Mittwoch, 2026-06-10 (open: 1; done: 0)");
+
+        // Days in next week read as "Next <weekday>" / "Nächster <Wochentag>".
+        AgendaSection next_week;
+        next_week.kind = SectionKind::DATED;
+        next_week.day = ymd(2026, 6, 15);   // the following Monday
+        next_week.tasks = {task};
+        CHECK(presentation::section_header(
+                  next_week, today, DateFormat::DMY, Language::ENGLISH
+              ) == "Next Monday, 15.06.2026 (open: 1; done: 0)");
+        CHECK(presentation::section_header(
+                  next_week, today, DateFormat::DMY, Language::GERMAN
+              ) == "N\xc3\xa4""chster Montag, 15.06.2026 (open: 1; done: 0)");
     }
 }
