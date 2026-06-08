@@ -76,9 +76,9 @@ std::size_t status_to_index(Status status) {
     return 0;
 }
 
-// The recurrence row: a "Repeat" mode, an interval count, a weekday set and the
-// schedule basis. The mode index 0 is none; 1..4 are interval units; 5 is the
-// weekday set (see unit_from_repeat_index / repeat_index_from_unit).
+// The recurrence wizard's choices: the "Repeat" mode (index 0 = none, 1..4 =
+// interval units, 5 = a weekday set), the schedule basis, and the weekday
+// labels (see unit_from_repeat_index / repeat_index_from_unit).
 const std::vector<std::string> REPEAT_CHOICES = {
     "none", "days", "weeks", "months", "years", "weekdays",
 };
@@ -115,6 +115,36 @@ std::size_t repeat_index_from_unit(RecurUnit unit) {
         case RecurUnit::DAY:   break;
     }
     return 1;
+}
+
+/**
+ * Assembles a rule from the wizard's parts. Mode 0 (none) and the weekday mode
+ * with no day picked both yield no recurrence; modes 1..4 build an interval
+ * rule, mode 5 a (Monday-first sorted) weekday rule.
+ */
+std::optional<RecurrenceRule> make_recurrence(
+    std::size_t mode, int count, std::vector<std::chrono::weekday> weekdays,
+    RecurBasis basis
+) {
+    if(mode == 5) {
+        if(weekdays.empty()) {
+            return std::nullopt;
+        }
+        std::ranges::sort(weekdays, {}, [](std::chrono::weekday day) {
+            return day.iso_encoding();
+        });
+        return RecurrenceRule{
+            .unit = RecurUnit::DAY, .interval = 1,
+            .weekdays = std::move(weekdays), .basis = basis
+        };
+    }
+    if(mode >= 1 && mode <= 4) {
+        return RecurrenceRule{
+            .unit = unit_from_repeat_index(mode),
+            .interval = std::max(1, count), .weekdays = {}, .basis = basis
+        };
+    }
+    return std::nullopt;
 }
 
 /** Seeds the date picker from a calendar day (the value fields only). */
@@ -162,6 +192,123 @@ struct FormResult {
     std::optional<RecurrenceRule> recurrence;
 };
 
+/** Outcome of the recurrence wizard (changed=false when the user cancels). */
+struct RecurChoice {
+    bool changed = false;
+    std::optional<RecurrenceRule> rule;
+};
+
+/** A rounded, full-width purple frame shared by the wizard's pickers. */
+sparcli::SelectOpts wizard_select_opts(const char* prompt) {
+    return sparcli::SelectOpts{
+        .prompt = prompt,
+        .accent = sparcli::palette::purple(),
+        .box = {
+            .enabled = true,
+            .border = {.type = SC_BORDER_ROUNDED,
+                       .color = sparcli::palette::purple()},
+            .width_mode = SC_WIDTH_FULL,
+        },
+    };
+}
+
+/**
+ * Step-by-step recurrence editor: asks only the inputs that apply to the chosen
+ * mode (a count for intervals, a weekday set for weekdays, then the basis).
+ * Each step is seeded from `current`; cancelling any step keeps `current`.
+ *
+ * @param current The rule being edited (std::nullopt = not recurring).
+ * @return The new rule (or std::nullopt for "none"), or changed=false on cancel.
+ */
+RecurChoice run_recurrence_wizard(const std::optional<RecurrenceRule>& current) {
+    // Seed mode / count / weekday set / basis from the current rule.
+    std::size_t mode_seed = 0;
+    int count_seed = 1;
+    std::vector<std::size_t> weekday_seed;
+    std::size_t basis_seed = 0;
+    if(current) {
+        basis_seed = current->basis == RecurBasis::COMPLETION ? 1 : 0;
+        if(!current->weekdays.empty()) {
+            mode_seed = 5;
+            for(const auto& day : current->weekdays) {
+                weekday_seed.push_back(day.iso_encoding() - 1);
+            }
+        } else {
+            mode_seed = repeat_index_from_unit(current->unit);
+            count_seed = current->interval;
+        }
+    }
+
+    // 1) Mode.
+    sparcli::Select mode_pick(wizard_select_opts("Repeat"));
+    for(const auto& choice : REPEAT_CHOICES) {
+        mode_pick.add(choice);
+    }
+    mode_pick.set_cursor(mode_seed);
+    const auto mode = mode_pick.run_one();
+    if(!mode) {
+        return {};   // cancelled
+    }
+    if(*mode == 0) {
+        return {.changed = true, .rule = std::nullopt};   // explicit "none"
+    }
+
+    // 2) The input that applies to the chosen mode.
+    int count = count_seed;
+    std::vector<std::chrono::weekday> weekdays;
+    if(*mode == 5) {
+        sparcli::SelectOpts day_opts =
+            wizard_select_opts("Weekdays (space toggles, enter confirms)");
+        day_opts.multi = true;
+        sparcli::Select day_pick(day_opts);
+        for(const auto& label : WEEKDAY_CHOICES) {
+            day_pick.add(label);
+        }
+        for(const auto index : weekday_seed) {
+            day_pick.set_checked(index, true);
+        }
+        const auto picked = day_pick.run();
+        if(!picked) {
+            return {};   // cancelled
+        }
+        for(const auto index : *picked) {
+            if(index < WEEKDAYS_MON_FIRST.size()) {
+                weekdays.push_back(WEEKDAYS_MON_FIRST[index]);
+            }
+        }
+    } else {
+        const auto value = sparcli::number_input(
+            "Every how many " + REPEAT_CHOICES[*mode] + "?",
+            {.initial = static_cast<double>(count_seed), .min = 1, .max = 999,
+             .decimals = 0,
+             .box = {.enabled = true,
+                     .border = {.type = SC_BORDER_ROUNDED,
+                                .color = sparcli::palette::purple()},
+                     .width_mode = SC_WIDTH_FULL}}
+        );
+        if(!value) {
+            return {};   // cancelled
+        }
+        count = std::max(1, static_cast<int>(std::lround(*value)));
+    }
+
+    // 3) Basis (skipped only for "none", handled above).
+    sparcli::Select basis_pick(wizard_select_opts("Repeat from"));
+    for(const auto& choice : REPEAT_FROM_CHOICES) {
+        basis_pick.add(choice);
+    }
+    basis_pick.set_cursor(basis_seed);
+    const auto basis_index = basis_pick.run_one();
+    if(!basis_index) {
+        return {};   // cancelled
+    }
+    const RecurBasis basis =
+        *basis_index == 1 ? RecurBasis::COMPLETION : RecurBasis::DUE;
+
+    return {.changed = true,
+            .rule = make_recurrence(*mode, count, std::move(weekdays), basis)};
+}
+
 /**
  * Builds and runs the task/note form, seeded from `existing` when editing.
  *
@@ -176,33 +323,24 @@ std::optional<FormResult> run_task_form(
 ) {
     const bool is_note = existing ? existing->note : note_default;
     const std::string editor = resolve_editor(config);
-    // A zeroed seed leaves the field empty (no due date) and opens the picker
-    // at today; an existing due date pre-selects that day.
-    const std::tm due_initial =
-        (existing && existing->due) ? to_tm(*existing->due) : std::tm{};
 
-    // Recurrence seeds: derive the Repeat mode, interval, checked weekdays and
-    // basis from an existing rule (all default to "no recurrence" otherwise).
-    std::size_t repeat_seed = 0;
-    double every_seed = 1;
-    std::vector<std::size_t> weekday_seed;
-    std::size_t repeat_from_seed = 0;
-    if(existing && existing->recurrence) {
-        const RecurrenceRule& rule = *existing->recurrence;
-        repeat_from_seed = rule.basis == RecurBasis::COMPLETION ? 1 : 0;
-        if(!rule.weekdays.empty()) {
-            repeat_seed = 5;
-            for(const auto& day : rule.weekdays) {
-                weekday_seed.push_back(day.iso_encoding() - 1);
-            }
-        } else {
-            repeat_seed = repeat_index_from_unit(rule.unit);
-            every_seed = rule.interval;
-        }
+    // Editable state, seeded from `existing`; the form is rebuilt from this on
+    // each pass so the recurrence wizard (Ctrl-R) can refresh its summary while
+    // the other fields keep their current values.
+    FormResult state;
+    state.note = is_note;
+    if(existing) {
+        state.title = existing->title;
+        state.description = existing->description;
+        state.due = existing->due;
+        state.priority = existing->priority;
+        state.someday = existing->someday;
+        state.status = existing->status;
+        state.recurrence = existing->recurrence;
     }
 
     // The pinned header gives the same shell as the finder; it is borrowed by
-    // run(), so it must outlive the form.
+    // run(), so it must outlive every rebuild of the form.
     sparcli::Text head;
     head.append(
         "mdtask", sparcli::style(SC_TEXT_ATTR_BOLD, sparcli::palette::purple())
@@ -231,178 +369,156 @@ std::optional<FormResult> run_task_form(
     }
     const sparcli::Rendered header = presentation::app_header(head);
 
-    sparcli::Form form({
-        // Magenta highlights the active cell and the inline editor panel.
-        .accent = sparcli::palette::magenta(),
-        .hide_summary = true,          // no "Form saved" line after submit
-        // For a new item, open the title editor right away; when editing,
-        // start in navigation mode.
-        .autoedit = existing == nullptr,
-        .editor = editor.c_str(),
-        .editor_suffix = ".md",        // temp file gets a .md extension for nvim
-        .fullscreen = true,            // share the finder's alternate screen
-        // Two layout variants to compare:
-        //  (A) SC_VALIGN_TOP + Description `.fill_height = true` -> the form
-        //      sits at the top and the description grows to fill the screen.
-        //  (B) SC_VALIGN_MIDDLE + content scope (current) -> the header stays
-        //      pinned at the very top, the hint/edit footer at the very bottom,
-        //      and the fields are centered in the gap between them.
-        // (A) is commented out (here and at .fill_height below); flip to switch.
-        .valign = SC_VALIGN_MIDDLE,
-        .valign_scope = SC_VALIGN_SCOPE_CONTENT,
-        .header = header.get(),
-        .modified_marker = "[*] ",     // flag changed fields in their box title
-    });
-
     // A note's grid is single-column; a task's title/description span all five.
     const int wide_span = is_note ? 1 : 5;
+    constexpr int ACT_EDIT_RECURRENCE = 1;
 
-    form.row_begin();
-    const int title_id = form.add_text(
-        "Title", existing ? existing->title : "",
-        {.width_mode = SC_FWIDTH_AUTO, .col_span = wide_span, .required = true}
-    );
+    bool dirty = false;   // any edit (a field or the wizard) across all passes
+    bool first = true;
+    for(;;) {
+        sparcli::FormOpts opts{
+            // Magenta highlights the active cell and the inline editor panel.
+            .accent = sparcli::palette::magenta(),
+            .hide_summary = true,          // no "Form saved" line after submit
+            // Open the title editor right away only on the first pass of a new
+            // item; reopening after the wizard starts in navigation mode.
+            .autoedit = existing == nullptr && first,
+            .editor = editor.c_str(),
+            .editor_suffix = ".md",        // temp file gets a .md extension
+            .fullscreen = true,            // share the finder's alternate screen
+            .valign = SC_VALIGN_MIDDLE,
+            .valign_scope = SC_VALIGN_SCOPE_CONTENT,
+            .header = header.get(),
+            .modified_marker = "[*] ",     // flag changed fields in their title
+        };
+        // Ctrl-R ends this run to open the recurrence wizard (tasks only); the
+        // loop then reopens the form with the refreshed Repeat summary.
+        sparcli::Shortcuts shortcuts;
+        if(!is_note) {
+            shortcuts.on_return(
+                sparcli::key_ctrl('r'), ACT_EDIT_RECURRENCE, "repeat"
+            );
+        }
+        shortcuts.apply(opts);
 
-    // Task-only fields: priority, due, someday, status.
-    int priority_id = -1;
-    int due_id = -1;
-    int someday_id = -1;
-    int status_id = -1;
-    int repeat_id = -1;
-    int every_id = -1;
-    int weekdays_id = -1;
-    int repeat_from_id = -1;
-    if(!is_note) {
+        // A zeroed seed leaves the due field empty; a set date pre-selects it.
+        const std::tm due_initial = state.due ? to_tm(*state.due) : std::tm{};
+
+        sparcli::Form form(opts);
+
         form.row_begin();
-        priority_id = form.add_select(
-            "Priority", PRIORITY_CHOICES,
-            existing ? priority_to_index(existing->priority) : 0,
-            {.width_mode = SC_FWIDTH_PCT, .width = 20}
-        );
-        due_id = form.add_date(
-            "Due", due_initial,
-            {.width_mode = SC_FWIDTH_PCT, .width = 20, .date_optional = true,
-             .help = "enter picks a date, del clears it"}
-        );
-        someday_id = form.add_bool(
-            "Someday", existing ? existing->someday : false,
-            {.width_mode = SC_FWIDTH_PCT, .width = 20}
+        const int title_id = form.add_text(
+            "Title", state.title,
+            {.width_mode = SC_FWIDTH_AUTO, .col_span = wide_span,
+             .required = true}
         );
 
-        status_id = form.add_select(
-            "Status", STATUS_CHOICES,
-            existing ? status_to_index(existing->status) : 0,
-            {.width_mode = SC_FWIDTH_PCT, .width = 20}
-        );
-    }
+        // Task-only fields: priority, due, someday, status.
+        int priority_id = -1;
+        int due_id = -1;
+        int someday_id = -1;
+        int status_id = -1;
+        if(!is_note) {
+            form.row_begin();
+            priority_id = form.add_select(
+                "Priority", PRIORITY_CHOICES, priority_to_index(state.priority),
+                {.width_mode = SC_FWIDTH_PCT, .width = 20}
+            );
+            due_id = form.add_date(
+                "Due", due_initial,
+                {.width_mode = SC_FWIDTH_PCT, .width = 20, .date_optional = true,
+                 .help = "enter picks a date, del clears it"}
+            );
+            someday_id = form.add_bool(
+                "Someday", state.someday,
+                {.width_mode = SC_FWIDTH_PCT, .width = 20}
+            );
+            status_id = form.add_select(
+                "Status", STATUS_CHOICES, status_to_index(state.status),
+                {.width_mode = SC_FWIDTH_PCT, .width = 20}
+            );
+        }
 
-    // In the note layout the checkbox gets its own full-width row; on the task
-    // row it is the fifth column (PCT to line up with the other four).
-    sparcli::FieldOpts note_opts{};
-    if(is_note) {
+        // In the note layout the checkbox gets its own full-width row; on the
+        // task row it is the fifth column (PCT to line up with the other four).
+        sparcli::FieldOpts note_opts{};
+        if(is_note) {
+            form.row_begin();
+            note_opts.width_mode = SC_FWIDTH_AUTO;
+        } else {
+            note_opts.width_mode = SC_FWIDTH_PCT;
+            note_opts.width = 20;
+        }
+        const int note_id = form.add_bool("Note", state.note, note_opts);
+
+        // A single, display-only Repeat summary (task only); the wizard (Ctrl-R)
+        // is the only way to change it, so its typed value is ignored on submit.
+        if(!is_note) {
+            std::string repeat_summary = "none";
+            if(state.recurrence) {
+                repeat_summary = format_recurrence(*state.recurrence);
+                if(state.recurrence->basis == RecurBasis::COMPLETION) {
+                    repeat_summary += "  \xc2\xb7  from completion";
+                }
+            }
+            form.row_begin();
+            static_cast<void>(form.add_text(
+                "Repeat", repeat_summary,
+                {.width_mode = SC_FWIDTH_AUTO, .col_span = wide_span,
+                 .help = "Ctrl-R to edit recurrence"}
+            ));
+        }
+
         form.row_begin();
-        note_opts.width_mode = SC_FWIDTH_AUTO;
-    } else {
-        note_opts.width_mode = SC_FWIDTH_PCT;
-        note_opts.width = 20;
-    }
-    const int note_id = form.add_bool("Note", is_note, note_opts);
+        const int description_id = form.add_text(
+            "Description", state.description,
+            {.width_mode = SC_FWIDTH_AUTO, .col_span = wide_span, .height = 6,
+             .multiline = true, .help = "ctrl-g opens the editor"}
+        );
 
-    // Recurrence row (task only): pick a Repeat mode plus its supporting input.
-    // `Every` applies to days/weeks/months/years; `Weekdays` to the weekday set.
-    if(!is_note) {
-        form.row_begin();
-        repeat_id = form.add_select(
-            "Repeat", REPEAT_CHOICES, repeat_seed,
-            {.width_mode = SC_FWIDTH_PCT, .width = 20}
-        );
-        every_id = form.add_number(
-            "Every", every_seed,
-            {.width_mode = SC_FWIDTH_PCT, .width = 20,
-             .help = "count for days/weeks/months/years"}
-        );
-        // Spans two of the row's five columns (like Title/Description span all
-        // five), so the column grid stays uniform with the row above instead of
-        // a conflicting 40% width that would shift the other cells.
-        weekdays_id = form.add_multiselect(
-            "Weekdays", WEEKDAY_CHOICES, weekday_seed,
-            {.width_mode = SC_FWIDTH_AUTO, .col_span = 2,
-             .help = "used when Repeat = weekdays"}
-        );
-        repeat_from_id = form.add_select(
-            "Repeat from", REPEAT_FROM_CHOICES, repeat_from_seed,
-            {.width_mode = SC_FWIDTH_PCT, .width = 20}
-        );
-    }
+        const bool submitted = form.run();
+        // A RETURN shortcut also ends run() with SC_INPUT_OK, so check which
+        // chord fired before treating a non-cancel exit as a submit.
+        const int fired = shortcuts.fired();
+        dirty = dirty || form.modified();   // accumulate across rebuilds
 
-    form.row_begin();
-    const int description_id = form.add_text(
-        "Description", existing ? existing->description : "",
-        {.width_mode = SC_FWIDTH_AUTO, .col_span = wide_span, .height = 6,
-         // Commented out to try the centered layout instead of the fill layout
-         // (see the .valign note above); re-enable together with SC_VALIGN_TOP.
-         // .fill_height = true,
-         .multiline = true, .help = "ctrl-g opens the editor"}
-    );
+        // Read the live field values back into state before the form is gone.
+        state.title = std::string(form.get_string(title_id));
+        state.description = std::string(form.get_string(description_id));
+        state.note = form.get_bool(note_id);
+        if(!is_note) {
+            state.priority = priority_from_index(form.get_choice(priority_id));
+            state.someday = form.get_bool(someday_id);
+            state.status = status_from_index(form.get_choice(status_id));
+            const auto picked = form.get_date(due_id);
+            state.due = (picked && !sparcli::date_empty(*picked))
+                ? from_tm(*picked)
+                : std::nullopt;
+        }
 
-    if(!form.run()) {
+        if(fired == ACT_EDIT_RECURRENCE) {
+            const RecurChoice choice = run_recurrence_wizard(state.recurrence);
+            if(choice.changed) {
+                state.recurrence = choice.rule;
+                dirty = true;
+            }
+            first = false;
+            continue;   // rebuild with the refreshed summary
+        }
+        if(submitted) {
+            break;
+        }
         // Esc: discard a pristine form silently; otherwise ask (default save).
-        if(!form.modified()) {
+        if(!dirty) {
             return std::nullopt;
         }
         if(!sparcli::confirm("Save changes?", {.default_yes = true})
                 .value_or(false)) {
             return std::nullopt;
         }
+        break;
     }
-
-    FormResult result;
-    result.title = std::string(form.get_string(title_id));
-    result.description = std::string(form.get_string(description_id));
-    result.note = form.get_bool(note_id);
-
-    // Task-only fields are read only when present; a note keeps the defaults.
-    if(!is_note) {
-        result.priority = priority_from_index(form.get_choice(priority_id));
-        result.someday = form.get_bool(someday_id);
-        result.status = status_from_index(form.get_choice(status_id));
-        if(const auto picked = form.get_date(due_id);
-           picked && !sparcli::date_empty(*picked)) {
-            result.due = from_tm(*picked);
-        }
-
-        // Build the recurrence rule from the Repeat mode (0 = none).
-        const std::size_t repeat_choice = form.get_choice(repeat_id);
-        const RecurBasis basis = form.get_choice(repeat_from_id) == 1
-            ? RecurBasis::COMPLETION
-            : RecurBasis::DUE;
-        if(repeat_choice == 5) {
-            std::vector<std::chrono::weekday> weekdays;
-            for(const auto index : form.get_checked(weekdays_id)) {
-                if(index < WEEKDAYS_MON_FIRST.size()) {
-                    weekdays.push_back(WEEKDAYS_MON_FIRST[index]);
-                }
-            }
-            std::ranges::sort(weekdays, {}, [](std::chrono::weekday day) {
-                return day.iso_encoding();
-            });
-            if(!weekdays.empty()) {   // no day picked means no recurrence
-                result.recurrence = RecurrenceRule{
-                    .unit = RecurUnit::DAY, .interval = 1,
-                    .weekdays = std::move(weekdays), .basis = basis
-                };
-            }
-        } else if(repeat_choice >= 1 && repeat_choice <= 4) {
-            const int interval = std::max(
-                1, static_cast<int>(std::lround(form.get_number(every_id)))
-            );
-            result.recurrence = RecurrenceRule{
-                .unit = unit_from_repeat_index(repeat_choice),
-                .interval = interval, .weekdays = {}, .basis = basis
-            };
-        }
-    }
-    return result;
+    return state;
 }
 
 }  // namespace

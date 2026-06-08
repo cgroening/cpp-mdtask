@@ -64,11 +64,12 @@ repeat_from: due      # due (default) or completion
 - `repeat_from: completion` measures the next date from the day you complete it
   (e.g. `every 3 days` restarts the clock when you do it).
 
-A recurring task is marked with a trailing `↻` in the agenda. The **Recurring**
+A recurring task is marked with a leading `↻` in the agenda. The **Recurring**
 view (`2`) lists each series' upcoming occurrences for the current and next week
-(at least the next one). Set recurrence in the task form (the **Repeat** field –
-pick a unit and count, or a set of weekdays, plus **Repeat from**); set Repeat to
-`none` to end the series. Editing the task's `.md` file (`e`) works too.
+(at least the next one). In the task form, the **Repeat** field shows the current
+rule; press **Ctrl-R** to open a small wizard that asks only what applies (a
+count for days/weeks/months/years, *or* a set of weekdays, then the basis).
+Choose `none` to end the series. Editing the task's `.md` file (`e`) works too.
 
 ## Agenda sections
 
