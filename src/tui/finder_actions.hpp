@@ -24,7 +24,6 @@ enum FinderAction {
     ACT_SHIFT_MINUS    = 3,
     ACT_ARCHIVE        = 4,
     ACT_NEW            = 5,
-    ACT_TOGGLE_ARCHIVE = 6,
     ACT_RESTORE        = 7,
     ACT_JUMP           = 8,
     ACT_CYCLE_STATUS   = 9,
@@ -32,7 +31,6 @@ enum FinderAction {
     ACT_MOVE_DOWN      = 11,
     ACT_MOVE_TOP       = 12,
     ACT_MOVE_BOTTOM    = 13,
-    ACT_TOGGLE_LIST    = 14,
     ACT_DELETE         = 15,
     ACT_QUIT           = 16,
     ACT_NEW_OTHER      = 17,
@@ -41,6 +39,11 @@ enum FinderAction {
     ACT_HELP           = 20,
     ACT_TOGGLE_SUGGEST = 21,
     ACT_FOCUS_SUGGEST  = 22,
+    ACT_VIEW_TASKS     = 23,
+    ACT_VIEW_RECURRING = 24,
+    ACT_VIEW_NOTES     = 25,
+    ACT_VIEW_ARCHIVE   = 26,
+    ACT_VIEW_SEARCH    = 27,
 };
 
 /** One line of the keyboard-shortcut help: a section header or a key/action. */

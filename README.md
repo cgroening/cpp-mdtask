@@ -58,6 +58,8 @@ Sections are computed from the front matter and only shown when non-empty:
 
 Modal (vim-style): the finder starts in normal mode.
 
+- `1` / `2` / `3` / `4` / `5` – switch view: Tasks / Recurring / Notes /
+  Archive / Search (Recurring and Search are placeholders for now).
 - `Enter` – edit the task in a form (Ctrl-G opens the description in `$EDITOR`).
 - `d` – toggle done (greyed in place, kept until archived).
 - `p` – cycle status (open → in progress → paused → cancelled).

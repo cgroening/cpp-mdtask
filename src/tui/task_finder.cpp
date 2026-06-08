@@ -26,7 +26,9 @@ namespace mdtask {
 namespace {
 
 // Which view (and therefore which table layout) the finder is rendering.
-enum class Layout { TASKS, NOTES, ARCHIVE };
+// PLACEHOLDER is used for an empty view (or the not-yet-implemented Recurring
+// view): a single disabled info row, so the finder still has content to show.
+enum class Layout { TASKS, NOTES, ARCHIVE, PLACEHOLDER };
 
 // Per-layout column headers (✎ = note marker, ◌ = status, ☑ = subtasks,
 // → = relative due). The TASKS view leads with the status glyph. The *_SEL
@@ -41,6 +43,7 @@ constexpr const char* NOTE_HEADERS[]   = {"Task"};
 constexpr const char* NOTE_HEADERS_SEL[] = {"", "Task"};
 constexpr const char* ARCHIVE_HEADERS[] = {"\xe2\x9c\x8e", "!", "\xe2\x97\x8c",
                                            "Task", "Due/Done"};
+constexpr const char* PLACEHOLDER_HEADERS[] = {""};
 
 /** Headers, column count and the searched/stretched (title) column for a view. */
 struct ColumnSpec {
@@ -54,8 +57,9 @@ ColumnSpec column_spec(Layout layout, bool has_selection) {
         case Layout::NOTES:
             return has_selection ? ColumnSpec{NOTE_HEADERS_SEL, 2, 1}
                                  : ColumnSpec{NOTE_HEADERS, 1, 0};
-        case Layout::ARCHIVE: return {ARCHIVE_HEADERS, 5, 3};
-        case Layout::TASKS:   break;
+        case Layout::ARCHIVE:     return {ARCHIVE_HEADERS, 5, 3};
+        case Layout::PLACEHOLDER: return {PLACEHOLDER_HEADERS, 1, 0};
+        case Layout::TASKS:       break;
     }
     return has_selection ? ColumnSpec{TASK_HEADERS_SEL, 7, 4}
                          : ColumnSpec{TASK_HEADERS, 6, 3};
@@ -139,6 +143,7 @@ void add_row(
     std::vector<sparcli::TextStyle> styles;
     switch(layout) {
         case Layout::NOTES:
+        case Layout::PLACEHOLDER:   // single title column (never reached here)
             fields = {task.title};
             styles = {presentation::title_style(task)};
             break;
@@ -309,21 +314,13 @@ RowIndex populate_archive(
     return rows;
 }
 
-/** Shows a message the user dismisses with OK (Enter). */
-void acknowledge(std::string_view message) {
-    const std::string text(message);
-    sparcli::Select dialog(sparcli::SelectOpts{
-        .prompt = text.c_str(),
-        .accent = sparcli::palette::purple(),
-        .box = {
-            .enabled = true,
-            .border = {.type = SC_BORDER_ROUNDED,
-                       .color = sparcli::palette::purple()},
-            .width_mode = SC_WIDTH_FULL,
-        },
-    });
-    dialog.add("OK");
-    static_cast<void>(dialog.run_one());
+/** Fills the finder with one disabled info row (empty / not-yet views). */
+RowIndex populate_placeholder(sparcli::Fuzzy& finder, const std::string& text) {
+    RowIndex rows;
+    finder.add_row_styled({text}, {sparcli::style(SC_TEXT_ATTR_DIM)});
+    finder.set_disabled(0);          // non-selectable, greyed
+    rows.by_index.emplace_back(std::nullopt);   // no task behind this row
+    return rows;
 }
 
 /** Opens a section picker; returns the chosen target's first-task id, or 0. */
@@ -484,7 +481,9 @@ void show_load_warnings(const std::vector<std::string>& warnings) {
 sparcli::Rendered build_tabbar(
     int active, std::size_t skipped, const std::string& suggestion
 ) {
-    const char* const names[] = {"Tasks", "Notes", "Archive"};
+    const char* const names[] = {
+        "[1] Tasks", "[2] Recurring", "[3] Notes", "[4] Archive", "[5] Search"
+    };
     const sparcli::TextStyle app_title = sparcli::style(
         SC_TEXT_ATTR_BOLD, sparcli::palette::purple()
     );
@@ -494,7 +493,7 @@ sparcli::Rendered build_tabbar(
 
     sparcli::Text bar;
     bar.append("mdtask    ", app_title);
-    for(int i = 0; i < 3; ++i) {
+    for(int i = 0; i < 5; ++i) {
         if(i > 0) {
             bar.append("  \xe2\x94\x82  ", off);   // " │ "
         }
@@ -591,12 +590,11 @@ void run_task_finder(TaskService& service, const Config& config) {
         show_load_warnings(startup_warnings);
     }
 
-    enum class View { TASKS, NOTES };
-    View list_view = View::TASKS;  // the active non-archive list
-    bool show_archive = false;     // overlays the archive on top of the list
-    bool show_suggestion = false;  // banner with the recommended next task
-    std::uint64_t focus = 0;       // id to keep the cursor on after a rebuild
-    Selection selected;            // task ids marked with Space for bulk actions
+    enum class View { TASKS, RECURRING, NOTES, ARCHIVE, SEARCH };
+    View view = View::TASKS;        // the active view (chosen with keys 1-5)
+    bool show_suggestion = false;   // banner with the recommended next task
+    std::uint64_t focus = 0;        // id to keep the cursor on after a rebuild
+    Selection selected;             // task ids marked with Space for bulk actions
 
     // One alternate-screen session spans the whole loop, so switching between
     // the views and the edit form never flickers.
@@ -604,29 +602,45 @@ void run_task_finder(TaskService& service, const Config& config) {
 
     for(;;) {
         const auto today = mdtask::today();
-        const Layout layout = show_archive ? Layout::ARCHIVE
-            : (list_view == View::NOTES ? Layout::NOTES : Layout::TASKS);
-        const int active_tab =
-            show_archive ? 2 : (list_view == View::NOTES ? 1 : 0);
+
+        // Gather the items for the current view (RECURRING has none yet).
+        std::vector<Task> items;
+        switch(view) {
+            case View::TASKS:   items = service.all_tasks(); break;
+            case View::NOTES:   items = service.notes(); sort_notes(items); break;
+            case View::ARCHIVE: items = service.archived_tasks(); break;
+            case View::RECURRING:
+            case View::SEARCH:  break;   // placeholder, no items
+        }
+        // An empty view (or a not-yet-built view) renders a single disabled
+        // placeholder row, so the finder still has content to show.
+        const bool placeholder = (view == View::RECURRING)
+            || (view == View::SEARCH) || items.empty();
+        const Layout layout = placeholder ? Layout::PLACEHOLDER
+            : view == View::NOTES   ? Layout::NOTES
+            : view == View::ARCHIVE ? Layout::ARCHIVE
+                                    : Layout::TASKS;
+        const int active_tab = static_cast<int>(view);
 
         // Shortcuts are rebuilt each iteration so labels match the view; they
         // must outlive run().
         sparcli::Shortcuts shortcuts;
-        shortcuts.on_return(
-            sparcli::key_char('v'), ACT_TOGGLE_LIST,
-            list_view == View::TASKS ? "notes" : "tasks"
-        ).on_return(
-            sparcli::key_char('b'), ACT_TOGGLE_ARCHIVE,
-            show_archive ? "back" : "archive"
-        ).on_return(sparcli::key_special(SC_KEY_DELETE), ACT_DELETE, "delete")
-         .on_return(sparcli::key_special(SC_KEY_BACKSPACE), ACT_DELETE)
-         .on_return(sparcli::key_char('?'), ACT_HELP, "help")
-         .on_return(sparcli::key_char('q'), ACT_QUIT, "quit");
+        shortcuts.on_return(sparcli::key_char('1'), ACT_VIEW_TASKS, "tasks")
+                 .on_return(sparcli::key_char('2'), ACT_VIEW_RECURRING,
+                            "recurring")
+                 .on_return(sparcli::key_char('3'), ACT_VIEW_NOTES, "notes")
+                 .on_return(sparcli::key_char('4'), ACT_VIEW_ARCHIVE, "archive")
+                 .on_return(sparcli::key_char('5'), ACT_VIEW_SEARCH, "search")
+                 .on_return(sparcli::key_special(SC_KEY_DELETE), ACT_DELETE,
+                            "delete")
+                 .on_return(sparcli::key_special(SC_KEY_BACKSPACE), ACT_DELETE)
+                 .on_return(sparcli::key_char('?'), ACT_HELP, "help")
+                 .on_return(sparcli::key_char('q'), ACT_QUIT, "quit");
 
-        if(layout == Layout::ARCHIVE) {
+        if(view == View::ARCHIVE) {
             shortcuts.on_return(sparcli::key_char('r'), ACT_RESTORE, "restore")
                      .on_return(sparcli::key_char('s'), ACT_JUMP, "section");
-        } else if(layout == Layout::NOTES) {
+        } else if(view == View::NOTES) {
             shortcuts.on_return(sparcli::key_char(' '), ACT_TOGGLE_SELECT,
                                 "select")
                      .on_return(sparcli::key_char('n'), ACT_NEW, "new")
@@ -637,7 +651,7 @@ void run_task_finder(TaskService& service, const Config& config) {
                      .on_return(alt_key(SC_KEY_DOWN, false), ACT_MOVE_DOWN)
                      .on_return(alt_key(SC_KEY_UP, true), ACT_MOVE_TOP, "to end")
                      .on_return(alt_key(SC_KEY_DOWN, true), ACT_MOVE_BOTTOM);
-        } else {
+        } else if(view == View::TASKS) {
             shortcuts.on_return(sparcli::key_char(' '), ACT_TOGGLE_SELECT,
                                 "select")
                      .on_return(sparcli::key_char('r'), ACT_TOGGLE_SUGGEST,
@@ -661,22 +675,12 @@ void run_task_finder(TaskService& service, const Config& config) {
                      .on_return(alt_key(SC_KEY_DOWN, true), ACT_MOVE_BOTTOM);
         }
 
-        // Gather the items for the current view.
-        std::vector<Task> items;
-        if(layout == Layout::ARCHIVE) {
-            items = service.archived_tasks();
-        } else if(layout == Layout::NOTES) {
-            items = service.notes();
-            sort_notes(items);
-        } else {
-            items = service.all_tasks();
-        }
         // load_warnings() reflects the load that just produced `items`.
         const std::size_t skipped = service.load_warnings().size();
 
         // The next-task suggestion banner (Tasks view only, while toggled on).
         std::string suggestion_line;
-        if(layout == Layout::TASKS && show_suggestion) {
+        if(view == View::TASKS && !placeholder && show_suggestion) {
             if(const auto next = suggest_next_task(items)) {
                 const std::string when = next->due
                     ? presentation::format_relative_due(*next->due, today)
@@ -697,15 +701,21 @@ void run_task_finder(TaskService& service, const Config& config) {
         sparcli::FuzzyOpts opts =
             make_opts(column_spec(layout, !selected.empty()));
         opts.header = header.get();
-        opts.empty_text = layout == Layout::ARCHIVE ? "No archived items"
-            : layout == Layout::NOTES ? "No notes - press n to add one"
-                                      : "No tasks - press n to add one";
         shortcuts.apply(opts);
         sparcli::Fuzzy finder(opts);
 
         RowIndex rows;
         std::vector<JumpTarget> jump_targets;
-        if(layout == Layout::ARCHIVE) {
+        if(placeholder) {
+            const char* message =
+                view == View::RECURRING ? "Recurring tasks are coming soon"
+                : view == View::SEARCH
+                    ? "The full search feature is coming soon."
+                : view == View::NOTES   ? "No notes yet - press n to add one"
+                : view == View::ARCHIVE ? "No archived items yet"
+                                        : "No tasks yet - press n to add one";
+            rows = populate_placeholder(finder, message);
+        } else if(layout == Layout::ARCHIVE) {
             const auto groups = group_archive(items, today);
             rows = populate_archive(finder, groups, today, config.date_format);
             for(const auto& group : groups) {
@@ -751,35 +761,21 @@ void run_task_finder(TaskService& service, const Config& config) {
             continue;
         }
 
-        if(action == ACT_TOGGLE_LIST) {
-            // Switching into an empty list would open a finder with no rows and
-            // close immediately, so guard it and stay put with a message.
-            const bool to_notes = list_view == View::TASKS;
-            const bool target_empty = to_notes ? service.notes().empty()
-                                               : service.all_tasks().empty();
-            if(target_empty) {
-                acknowledge(
-                    to_notes
-                        ? "No notes yet. Tick 'Note' in the form to make one."
-                        : "No tasks yet."
-                );
-                continue;
+        if(action == ACT_VIEW_TASKS || action == ACT_VIEW_RECURRING
+           || action == ACT_VIEW_NOTES || action == ACT_VIEW_ARCHIVE
+           || action == ACT_VIEW_SEARCH) {
+            // Keys 1-5 switch the view directly; an empty target just shows its
+            // placeholder row instead of being blocked.
+            switch(action) {
+                case ACT_VIEW_TASKS:     view = View::TASKS;     break;
+                case ACT_VIEW_RECURRING: view = View::RECURRING; break;
+                case ACT_VIEW_NOTES:     view = View::NOTES;     break;
+                case ACT_VIEW_ARCHIVE:   view = View::ARCHIVE;   break;
+                case ACT_VIEW_SEARCH:    view = View::SEARCH;    break;
+                default:                                         break;
             }
-            show_archive = false;
-            list_view = to_notes ? View::NOTES : View::TASKS;
             focus = 0;
-            selected.clear();   // marks do not carry across lists
-            continue;
-        }
-
-        if(action == ACT_TOGGLE_ARCHIVE) {
-            if(!show_archive && service.archived_tasks().empty()) {
-                acknowledge("No archived items yet.");
-                continue;
-            }
-            show_archive = !show_archive;
-            focus = 0;
-            selected.clear();   // the archive is not multi-selectable
+            selected.clear();   // marks do not carry across views
             continue;
         }
 
@@ -811,16 +807,15 @@ void run_task_finder(TaskService& service, const Config& config) {
 
         if(action == ACT_NEW || action == ACT_NEW_OTHER) {
             // `n` creates the current view's type; `N` creates the opposite.
-            bool default_note = list_view == View::NOTES;
+            bool default_note = view == View::NOTES;
             if(action == ACT_NEW_OTHER) {
                 default_note = !default_note;
             }
             if(const auto created =
                    run_new_task_form(service, config, default_note)) {
-                // Land on the new item's own list so it is visible.
+                // Land on the new item's own view so it is visible.
                 focus = row_id(created->id);
-                list_view = created->note ? View::NOTES : View::TASKS;
-                show_archive = false;
+                view = created->note ? View::NOTES : View::TASKS;
             }
             continue;
         }
@@ -866,20 +861,14 @@ void run_task_finder(TaskService& service, const Config& config) {
                     report(service.delete_task(id));
                 }
                 selected.clear();
-                if(show_archive && service.archived_tasks().empty()) {
-                    show_archive = false;
-                }
             }
             continue;
         }
 
         // The archive view is read-only apart from restoring an item.
-        if(show_archive) {
+        if(view == View::ARCHIVE) {
             if(action == ACT_RESTORE) {
                 report(service.restore_task(task.id));
-                if(service.archived_tasks().empty()) {
-                    show_archive = false;
-                }
             }
             continue;
         }

@@ -14,8 +14,8 @@ std::vector<HelpItem> help_entries() {
         row("up/down or j/k", "move cursor"),
         row("i", "filter (type to search); Esc back to normal"),
         row("s", "jump to a section"),
-        row("v", "switch Tasks / Notes"),
-        row("b", "show / hide the Archive"),
+        row("1 / 2 / 3 / 4 / 5",
+            "switch view (Tasks / Recurring / Notes / Archive / Search)"),
         row("Enter", "edit the item"),
         row("q or Esc", "quit"),
 
