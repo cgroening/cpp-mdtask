@@ -255,7 +255,9 @@ void add_row(
 
     const std::uint64_t id = row_id(task.id);
     finder.set_id(index, id);
-    rows.index_by_id[id] = index;
+    // Keep the first row for an id, so focusing a recurring task (whose id
+    // repeats across projected occurrences) lands on its earliest event.
+    rows.index_by_id.emplace(id, index);
     rows.by_index.push_back(task);
     ++index;
 }
@@ -691,6 +693,8 @@ void run_task_finder(TaskService& service, const Config& config) {
                 .on_return(sparcli::key_char('e'), ACT_EDIT_FILE,
                            D{.footer = "edit file",
                              .help = "open the series .md file in $EDITOR"})
+                .on_return(sparcli::key_char('n'), ACT_NEW,
+                           D{.footer = "new", .help = "new task"})
                 .on_return(sparcli::key_char('s'), ACT_JUMP,
                            D{.footer = "section", .help = "jump to a section"});
         } else if(view == View::NOTES) {
@@ -929,9 +933,13 @@ void run_task_finder(TaskService& service, const Config& config) {
             }
             if(const auto created =
                    run_new_task_form(service, config, default_note)) {
-                // Land on the new item's own view so it is visible.
+                // Land on the new item's own view so it is visible: notes in
+                // Notes, recurring tasks in Recurring (on their first event),
+                // everything else in Tasks.
                 focus = row_id(created->id);
-                view = created->note ? View::NOTES : View::TASKS;
+                view = created->note          ? View::NOTES
+                     : created->recurrence    ? View::RECURRING
+                                              : View::TASKS;
             }
             continue;
         }
