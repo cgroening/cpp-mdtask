@@ -1,7 +1,7 @@
 # mdtask – markdown-based task manager
 
 A command-line task manager for modern C++ (C++26), built on a **layered
-architecture** and the [sparcli](../../../C/libs/sparcli) library (fuzzy
+architecture** and the [sparcli](https://github.com/cgroening/c-sparcli) library (fuzzy
 finder, forms, datepicker, markdown/YAML serde, layered config, XDG paths).
 
 Every task is **one Markdown file**: the title is the H1, the description is the
@@ -11,6 +11,8 @@ and back up however you like.
 
 The main screen is a **fuzzy agenda**: tasks grouped into day sections, with
 priority colors and inline editing.
+
+![The interactive fuzzy agenda, with tasks grouped into day sections and colored category badges](docs/images/screenshot-1.png)
 
 ```
 $ mdtask add "Pay the invoice" --due 2026-06-05 --priority high
@@ -80,6 +82,13 @@ Sections are computed from the front matter and only shown when non-empty:
 - **Today / Tomorrow / <date>** – one section per dated day from today on.
 - **Without date** – no due date, marked `someday`.
 
+## The task form
+
+Pressing `Enter` on a task opens a form with its title, category, priority,
+status, due date, repeat rule and description:
+
+![The task form for editing a task, showing the title, category, priority, status, due date, repeat rule and description fields](docs/images/screenshot-2.png)
+
 ## Fuzzy agenda keys
 
 Modal (vim-style): the finder starts in normal mode.
@@ -125,7 +134,11 @@ mdtask completion           print the zsh completion script
 
 ## Build
 
-mdtask links against sparcli (resolved via `pkg-config`):
+mdtask targets **POSIX systems only** (macOS and Linux); it relies on XDG paths
+and a real terminal, and is not supported on Windows.
+
+mdtask links against [sparcli](https://github.com/cgroening/c-sparcli)
+(resolved via `pkg-config`):
 
 ```
 make            # build bin/mdtask
