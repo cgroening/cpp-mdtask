@@ -1,6 +1,6 @@
 ---
 id: rec0weekly01
-title: Team-Standup
+title: Team standup
 due: 2026-06-09
 priority: medium
 someday: false
@@ -9,10 +9,10 @@ created: 2026-06-01
 repeat: weekly
 ---
 
-# Team-Standup
+# Team standup
 
-Tägliches Sync ist zu viel – wöchentliches Standup am Dienstag. Beim Abhaken
-rückt der Termin automatisch auf die nächste Woche.
+A daily sync is too much - a weekly standup on Tuesday instead. Checking it off
+rolls the date forward to next week automatically.
 
-- [ ] Blocker sammeln
-- [ ] Fortschritt teilen
+- [ ] collect blockers
+- [ ] share progress

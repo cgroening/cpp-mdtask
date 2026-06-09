@@ -55,7 +55,7 @@ make            # compiles to bin/mdtask
 
 # Run the binary directly (simplest):
 ./bin/mdtask                       # interactive fuzzy agenda (needs a tty)
-./bin/mdtask add "Buy milk"
+./bin/mdtask add "Fix segfault in the JSON parser"
 ./bin/mdtask list
 ./bin/mdtask done <id>
 ./bin/mdtask config
@@ -63,7 +63,7 @@ make            # compiles to bin/mdtask
 
 # Or via make. `make run` alone opens the agenda; pass arguments with ARGS:
 make run                       # -> fuzzy agenda
-make run ARGS='add "Buy milk"'
+make run ARGS='add "Review PR #142"'
 make run ARGS=list
 
 # Try it with the bundled sample tasks:
@@ -74,9 +74,26 @@ Note: `make run add` does not work – `make` reads `add` as a target, not an
 argument. Use `ARGS=` or call the binary directly.
 
 Tasks are stored as Markdown files in `$XDG_DATA_HOME/mdtask/tasks/` (falling
-back to `~/.local/share/mdtask/tasks/`); the debug log goes to
+back to `~/.local/share/mdtask/tasks/`); notes live in a sibling `notes/`
+directory and archived items move to `archive/`. The debug log goes to
 `$XDG_STATE_HOME/mdtask/mdtask.log`. Run `mdtask config` to see the resolved
 paths.
+
+## Regenerating the README screenshots
+
+The screenshots in `docs/images/` are taken from a small demo dataset and a
+matching config that live outside the repo (a separate config home so they
+don't touch your real tasks). With that setup in place, launch the app against
+it by overriding `XDG_CONFIG_HOME` (the config defines `tasks_dir`, so a single
+override is enough):
+
+```sh
+XDG_CONFIG_HOME=$HOME/.config/mdtask-readme ./bin/mdtask
+```
+
+The config at `$HOME/.config/mdtask-readme/mdtask/config.toml` points
+`tasks_dir` at the demo tasks and defines the colored category badges shown in
+the agenda. This is a personal capture setup, not part of the build.
 
 ## Test
 
