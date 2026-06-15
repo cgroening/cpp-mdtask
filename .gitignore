@@ -1,17 +1,104 @@
-# Build artefacts (.nosync keeps them out of file-syncing tools)
-/build/
-/build.nosync/
-/build-sanitize.nosync/
-/bin/
-*.o
-*.d
-
-# clangd compilation database (machine-specific; generate with `make compdb`)
-/compile_commands.json
-/.cache/
-
-# Local data file (only used as a fallback when no HOME is set)
-/tasks.tsv
+# ============================================================
+# C++
+# ============================================================
 
 # macOS
 .DS_Store
+**/.DS_Store
+._*
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+.fseventsd
+.DocumentRevisions-V100
+Icon
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux / editor backups
+*~
+.netrwhist
+
+# Editors / IDEs
+.vscode
+.idea
+*.code-workspace
+*.sw?
+.history
+
+# Environment files
+.env
+# ...but keep committable example/template files:
+!.env.example
+!.env.template
+
+# Logs
+*.log
+
+# Claude Code
+.claude
+
+# Build artefacts (.nosync keeps them out of file-syncing tools)
+/build/
+/bin/
+/build.nosync/
+/build-sanitize.nosync/
+/.cache/
+
+# Compiled object / dependency files
+*.o
+*.d
+*.slo
+*.lo
+*.obj
+*.gch
+*.pch
+*.mod
+*.smod
+
+# Linker / debug output
+*.ilk
+*.pdb
+*.dwo
+
+# Libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Shared objects
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# Executables
+*.exe
+*.out
+*.app
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+Testing/
+
+# vcpkg
+vcpkg_installed/
+
+# Misc build scratch
+*.tmp
+*.bak
+
+# clangd compilation database (machine-specific; generate with `make compdb`)
+/compile_commands.json
+
+# Local data file (only used as a fallback when no HOME is set)
+/tasks.tsv
