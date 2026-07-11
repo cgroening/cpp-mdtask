@@ -4,20 +4,13 @@ How to build, run, and test mdtask.
 
 ## Prerequisites
 
-- **A C++26 compiler.** Verify: `c++ -std=c++26 -x c++ -E - </dev/null`
-  prints nothing and exits 0. (Apple clang 17+, GCC 14+.)
+- **A C++26 compiler.** Verify: `c++ -std=c++26 -x c++ -E - </dev/null` prints nothing and exits 0. (Apple clang 17+, GCC 14+.)
 - **`make` and `pkg-config`.**
-- **sparcli with the framework modules *and* the C++ wrapper.** This is the
-  important one – see below.
+- **sparcli with the framework modules *and* the C++ wrapper.** This is the important one – see below.
 
 ### Installing sparcli (framework + C++ wrapper)
 
-mdtask uses sparcli's application framework: the argument parser
-(`args/sparcli_args.h`), logging (`log/sparcli_log.h`), XDG paths and pretty
-errors (`app/sparcli_app.h`) plus the C++ wrapper (`sparcli.hpp`). An older
-install that only has the output/input widgets will **not** build – the
-compile fails with `'args/sparcli_args.h' file not found` or with unknown
-`sparcli::Args` / `sparcli::logging` symbols.
+mdtask uses sparcli's application framework: the argument parser (`args/sparcli_args.h`), logging (`log/sparcli_log.h`), XDG paths and pretty errors (`app/sparcli_app.h`) plus the C++ wrapper (`sparcli.hpp`). An older install that only has the output/input widgets will **not** build – the compile fails with `'args/sparcli_args.h' file not found` or with unknown `sparcli::Args` / `sparcli::logging` symbols.
 
 ```sh
 cd /path/to/sparcli           # the sparcli checkout
@@ -34,14 +27,11 @@ ls "$incdir"/sparcli.hpp                # C++ wrapper - must exist
 ls "$incdir"/args/sparcli_args.h        # framework - must exist
 ```
 
-If either file is missing, the installed copy is outdated – re-install from
-a sparcli checkout that has the framework modules.
+If either file is missing, the installed copy is outdated – re-install from a sparcli checkout that has the framework modules.
 
 ### Building without installing
 
-To build against a local sparcli checkout instead of an installed copy,
-override both variables (the Makefile errors out with this hint if
-pkg-config finds nothing):
+To build against a local sparcli checkout instead of an installed copy, override both variables (the Makefile errors out with this hint if pkg-config finds nothing):
 
 ```sh
 make SPARCLI_CFLAGS=-I/path/to/sparcli/include \
@@ -70,30 +60,19 @@ make run ARGS=list
 MDTASK_TASKS_DIR=$(pwd)/examples/tasks ./bin/mdtask
 ```
 
-Note: `make run add` does not work – `make` reads `add` as a target, not an
-argument. Use `ARGS=` or call the binary directly.
+Note: `make run add` does not work – `make` reads `add` as a target, not an argument. Use `ARGS=` or call the binary directly.
 
-Tasks are stored as Markdown files in `$XDG_DATA_HOME/mdtask/tasks/` (falling
-back to `~/.local/share/mdtask/tasks/`); notes live in a sibling `notes/`
-directory and archived items move to `archive/`. The debug log goes to
-`$XDG_STATE_HOME/mdtask/mdtask.log`. Run `mdtask config` to see the resolved
-paths.
+Tasks are stored as Markdown files in `$XDG_DATA_HOME/mdtask/tasks/` (falling back to `~/.local/share/mdtask/tasks/`); notes live in a sibling `notes/` directory and archived items move to `archive/`. The debug log goes to `$XDG_STATE_HOME/mdtask/mdtask.log`. Run `mdtask config` to see the resolved paths.
 
 ## Regenerating the README screenshots
 
-The screenshots in `docs/images/` are taken from a small demo dataset and a
-matching config that live outside the repo (a separate config home so they
-don't touch your real tasks). With that setup in place, launch the app against
-it by overriding `XDG_CONFIG_HOME` (the config defines `tasks_dir`, so a single
-override is enough):
+The screenshots in `docs/images/` are taken from a small demo dataset and a matching config that live outside the repo (a separate config home so they don't touch your real tasks). With that setup in place, launch the app against it by overriding `XDG_CONFIG_HOME` (the config defines `tasks_dir`, so a single override is enough):
 
 ```sh
 XDG_CONFIG_HOME=$HOME/.config/mdtask-readme ./bin/mdtask
 ```
 
-The config at `$HOME/.config/mdtask-readme/mdtask/config.toml` points
-`tasks_dir` at the demo tasks and defines the colored category badges shown in
-the agenda. This is a personal capture setup, not part of the build.
+The config at `$HOME/.config/mdtask-readme/mdtask/config.toml` points `tasks_dir` at the demo tasks and defines the colored category badges shown in the agenda. This is a personal capture setup, not part of the build.
 
 ## Test
 
@@ -105,32 +84,22 @@ make sanitize   # same tests under AddressSanitizer + UBSan
 The suite is dependency-free (see `tests/check.hpp`). It covers:
 
 - **`tests/test_agenda.cpp`** – the pure section grouping/ordering.
-- **`tests/test_task_service.cpp`** – business rules, run against the
-  `InMemoryTaskRepository` fake (no filesystem).
+- **`tests/test_task_service.cpp`** – business rules, run against the `InMemoryTaskRepository` fake (no filesystem).
 - **`tests/test_markdown_document.cpp`** – front-matter/body round-trip.
-- **`tests/test_markdown_task_repository.cpp`** – slug/file naming, the
-  rename-on-change behaviour and archiving, in a throwaway temp directory.
-- **`tests/test_config_loader.cpp`** – layered config: defaults, TOML file
-  overrides, environment overrides, invalid values, malformed files.
+- **`tests/test_markdown_task_repository.cpp`** – slug/file naming, the rename-on-change behaviour and archiving, in a throwaway temp directory.
+- **`tests/test_config_loader.cpp`** – layered config: defaults, TOML file overrides, environment overrides, invalid values, malformed files.
 
-Add a test by writing `run_*_tests()` in a new `tests/*.cpp`, declaring it
-in `tests/test_suite.hpp`, and calling it from `tests/test_main.cpp`.
+Add a test by writing `run_*_tests()` in a new `tests/*.cpp`, declaring it in `tests/test_suite.hpp`, and calling it from `tests/test_main.cpp`.
 
 ## Editor setup (clangd)
 
-clangd does not run `pkg-config`, so it cannot guess where sparcli is
-installed. Generate a compilation database from the real build flags (no
-extra tools needed):
+clangd does not run `pkg-config`, so it cannot guess where sparcli is installed. Generate a compilation database from the real build flags (no extra tools needed):
 
 ```sh
 make compdb        # writes compile_commands.json with the actual include paths
 ```
 
-clangd prefers `compile_commands.json` over the static `compile_flags.txt`
-fallback and picks it up automatically (restart the LSP / reopen the file).
-The file is machine-specific and git-ignored – each developer runs
-`make compdb` once (and again after the sparcli install location or the
-compile flags change).
+clangd prefers `compile_commands.json` over the static `compile_flags.txt` fallback and picks it up automatically (restart the LSP / reopen the file). The file is machine-specific and git-ignored – each developer runs `make compdb` once (and again after the sparcli install location or the compile flags change).
 
 When building against a local checkout, pass the same overrides:
 
@@ -154,5 +123,4 @@ make sanitize                 # ASan/UBSan clean
 - [ ] `make sanitize` is clean.
 - [ ] New behaviour lives in the service (testable) and is covered by a test.
 - [ ] Dependencies still point only downward (no layer includes one above it).
-- [ ] New commands declare their arguments in `configure()` (no hand-rolled
-      argv parsing).
+- [ ] New commands declare their arguments in `configure()` (no hand-rolled argv parsing).
